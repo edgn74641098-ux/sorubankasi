@@ -1,0 +1,736 @@
+═══════════════════════════════════════════════════════════════════════════════════════════════
+LARAVEL SORU BANKASI - CPANEL/SHARED HOSTING OPTIMIZED GUIDE (v3.1)
+Standart cPanel'de (Redis olmadan, single server) implementasyon
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+⚠️  CRITICAL: Shared Hosting Constraints
+    - Single server (scaling yok v1'de)
+    - cPanel cron support (5 dakikada bir çalışabilir)
+    - Database Queue (Redis yok)
+    - MySQL 5.7+ (standart)
+    - PHP 8.2+ (eğer var)
+    - Connection pool: 10-20 default (tuning gerekli)
+    - File uploads: /public_html altında
+    - Email: cPanel mail system veya SMTP provider
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 1: CPANEL KURULUM VE SETUP
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[1.1] FTP/SSH ACCESS KURULUMU
+
+cPanel'de SSH key generate:
+  1. cPanel → Security → SSH Access
+  2. Public Key Manager → Generate or Paste Key
+  3. Manage SSH Keys (generate new)
+  4. Save private key (~ 2048 RSA)
+
+SSH bağlantı:
+  ssh -i /path/to/private_key username@hosting_domain.com
+
+[1.2] KOMUTLAR VIA SSH
+
+PHP version kontrol:
+  php -v
+  # PHP 8.2+ olmalı (eğer değilse hosting'e tıkla)
+
+Composer kurulum (if not already):
+  curl -sS https://getcomposer.org/installer | php
+  mv composer.phar /usr/local/bin/composer
+  composer --version
+
+Laravel kurulum:
+  cd /home/username/public_html
+  composer create-project laravel/laravel soru-bankasi
+  cd soru-bankasi
+
+[1.3] CPANEL DATABASE SETUP
+
+cPanel → MySQL Databases:
+  1. Create New Database
+  2. Name: username_sorubankasi (veya kısa ad)
+  3. Create Database Wizard
+  4. Add User: username_soru
+  5. Password: Strong password (min 8 char, complexity)
+  6. Add All Privileges
+  7. Confirm
+
+.env ayarla:
+  DB_CONNECTION=mysql
+  DB_HOST=localhost  # cPanel'de genelde localhost
+  DB_PORT=3306
+  DB_DATABASE=username_sorubankasi
+  DB_USERNAME=username_soru
+  DB_PASSWORD=[generated password]
+
+[1.4] PHP AYARLARI
+
+cPanel → MultiPHP INI Editor:
+  - max_execution_time: 300 (default 30 → 300 secs)
+  - max_input_time: 300
+  - post_max_size: 20M
+  - upload_max_filesize: 20M
+  - memory_limit: 256M (veya 512M)
+
+Veya .htaccess (public_html'de):
+  ```
+  php_value max_execution_time 300
+  php_value memory_limit 256M
+  php_value post_max_size 20M
+  php_value upload_max_filesize 20M
+  ```
+
+[1.5] LARAVEL .ENV (CPANEL SPECIFIC)
+
+.env dosyası:
+  APP_NAME="Soru Bankası"
+  APP_ENV=production
+  APP_DEBUG=false
+  APP_URL=https://your-domain.com
+  
+  DB_CONNECTION=mysql
+  DB_HOST=localhost
+  DB_PORT=3306
+  DB_DATABASE=username_sorubankasi
+  DB_USERNAME=username_soru
+  DB_PASSWORD=[password]
+  
+  CACHE_DRIVER=file  # Redis unavailable on shared hosting
+  QUEUE_CONNECTION=database  # Database queue (Redis yok)
+  SESSION_DRIVER=cookie  # veya file
+  
+  MAIL_MAILER=sendmail  # cPanel sendmail
+  MAIL_FROM_ADDRESS=noreply@yourdomain.com
+  MAIL_FROM_NAME="${APP_NAME}"
+  
+  LOG_CHANNEL=single
+  LOG_DEPRECATIONS_CHANNEL=null
+  LOG_LEVEL=debug
+
+[1.6] CPANEL SSL SETUP
+
+cPanel → SSL/TLS Status:
+  - Install SSL Certificate (usually free via AutoSSL)
+  - Force HTTPS redirect
+
+.htaccess (force HTTPS):
+  ```
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  ```
+
+===================================================================================================
+BÖLÜM 2: CPANEL-SPECIFIC OPTIMIZATIONS
+===================================================================================================
+
+[2.1] DATABASE CONNECTION POOL TUNING
+
+cPanel genelde 10-20 connection maksimum. Optimization:
+
+config/database.php (MySQL):
+  ```php
+  'mysql' => [
+      'driver' => 'mysql',
+      'host' => env('DB_HOST', 'localhost'),
+      'port' => env('DB_PORT', 3306),
+      'database' => env('DB_DATABASE'),
+      'username' => env('DB_USERNAME'),
+      'password' => env('DB_PASSWORD'),
+      'charset' => 'utf8mb4',
+      'collation' => 'utf8mb4_unicode_ci',
+      'prefix' => '',
+      'prefix_indexes' => true,
+      'strict' => true,
+      'engine' => null,
+      'options' => extension_loaded('pdo_mysql') ? array_filter([
+          PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+          PDO::ATTR_TIMEOUT => 10,  // 10 saniye timeout
+      ]) : [],
+      'pool' => [
+          'min' => 1,  # shared hosting: 1 min
+          'max' => 5,  # shared hosting: 5 max (10'den az tut)
+      ],
+  ],
+  ```
+
+Laravel queue worker'ında connection limit:
+  php artisan queue:work --max-jobs=100 --max-time=3600
+
+[2.2] CACHE DRIVER (FILE-BASED)
+
+cPanel'de Redis yok, file cache kullan:
+
+config/cache.php:
+  ```php
+  'default' => env('CACHE_DRIVER', 'file'),
+  'stores' => [
+      'file' => [
+          'driver' => 'file',
+          'path' => storage_path('framework/cache/data'),
+      ],
+  ],
+  ```
+
+TTL defaults:
+  - Leaderboard snapshot: 5 minutes
+  - Settings: 5 minutes
+  - Query results: 1 hour
+
+Cache cleanup (cron job'da):
+  php artisan cache:clear --tags=old_snapshots
+
+[2.3] QUEUE STRATEGY (DATABASE QUEUE)
+
+Queue connection = database (en basit, hosting-compatible):
+
+config/queue.php:
+  ```php
+  'default' => env('QUEUE_CONNECTION', 'database'),
+  'connections' => [
+      'database' => [
+          'driver' => 'database',
+          'table' => 'jobs',
+          'queue' => 'default',
+          'retry_after' => 90,
+          'after_commit' => false,
+      ],
+  ],
+  ```
+
+Cron job (instead of queue:work):
+  EVERY 5 MINUTES: php artisan queue:work --once --max-jobs=10
+
+Bu sayede:
+  - Queue worker 24/7 çalışmaz
+  - Her 5 dakikada job'lar process'lenir
+  - CPU usage az
+
+[2.4] LEADERBOARD SNAPSHOT (CRON-BASED, NOT QUEUE JOB)
+
+Standart Laravel queue job instead of cron:
+  php artisan queue:work --once  # Process 1 job then exit
+
+cPanel Cron Job:
+  */5 * * * * cd /home/username/public_html/soru-bankasi && php artisan queue:work --once > /dev/null 2>&1
+
+Alternative (Laravel Command via Cron):
+  */5 * * * * cd /home/username/public_html/soru-bankasi && php artisan leaderboard:snapshot
+
+app/Console/Commands/LeaderboardSnapshot.php:
+  ```php
+  class LeaderboardSnapshotCommand extends Command {
+      protected $signature = 'leaderboard:snapshot';
+      protected $description = 'Calculate leaderboard snapshots';
+      
+      public function handle() {
+          // Direct SQL calculation (no queue)
+          DB::statement('INSERT INTO leaderboard_global_snapshots ...');
+          DB::statement('INSERT INTO leaderboard_subject_snapshots ...');
+          $this->info('Leaderboard snapshot completed');
+      }
+  }
+  ```
+
+===================================================================================================
+BÖLÜM 3: CPANEL CRON JOBS SETUP
+===================================================================================================
+
+[3.1] CPANEL CRON ADD
+
+cPanel → Cron Jobs:
+  1. Common Settings → Every 5 minutes
+  2. Command:
+     cd /home/username/public_html/soru-bankasi && php artisan queue:work --once
+
+  3. Email Output: Off (log'a kaydet)
+  4. Add Cron Job
+
+[3.2] CPANEL CRON SCHEDULE
+
+Tasks (scheduling):
+
+  Every 5 minutes:
+    php artisan queue:work --once  # Process queued jobs (leaderboard snapshot, imports)
+
+  Every 24 hours (2 AM):
+    php artisan cleanup:audit-logs  # 90 gün eski log'ları sil
+
+  Every 7 days (Sunday 3 AM):
+    php artisan backup:database  # Database backup (if using)
+
+Cron setup komutlar:
+
+  ```bash
+  # cPanel'de SSH'dan:
+  crontab -e
+  
+  # Add:
+  */5 * * * * cd /home/username/public_html/soru-bankasi && php artisan queue:work --once > /var/log/soru-queue.log 2>&1
+  0 2 * * * cd /home/username/public_html/soru-bankasi && php artisan cleanup:audit-logs > /var/log/cleanup.log 2>&1
+  0 3 * * 0 cd /home/username/public_html/soru-bankasi && php artisan backup:database > /var/log/backup.log 2>&1
+  
+  # Save: Ctrl+X → Y → Enter
+  ```
+
+[3.3] BACKUP STRATEGY
+
+Manual backup (cPanel):
+  1. cPanel → Backup → Full Backup
+  2. Download backup (if available)
+
+Automated database backup (Laravel artisan):
+  app/Console/Commands/BackupDatabase.php:
+    ```php
+    class BackupDatabaseCommand extends Command {
+        public function handle() {
+            $backup_file = storage_path('backups/') . date('Y-m-d-His') . '.sql';
+            $command = "mysqldump -u" . env('DB_USERNAME') . 
+                      " -p" . env('DB_PASSWORD') . 
+                      " " . env('DB_DATABASE') . 
+                      " > " . $backup_file;
+            shell_exec($command);
+            $this->info("Backup saved to: " . $backup_file);
+        }
+    }
+    ```
+
+  Cron: Daily 2 AM backup
+
+===================================================================================================
+BÖLÜM 4: CPANEL-SPECIFIC MIGRATIONS & DEPLOYMENT
+===================================================================================================
+
+[4.1] MIGRATION STRATEGY
+
+Problem: SSH'da migration çalıştırmak zaman alıyor
+Solution: Batch migration via artisan command
+
+SSH'da:
+  ```bash
+  cd /home/username/public_html/soru-bankasi
+  php artisan migrate --force
+  php artisan db:seed
+  ```
+
+Eğer SSH erişimi yoksa, SFTP'den:
+  1. SFTP'de upload: database/migrations/
+  2. Artisan tinker (cPanel panel'den bile) veya
+  3. Hosting panel'de SSH terminal (eğer varsa)
+
+[4.2] INITIAL DEPLOYMENT
+
+Step 1: Upload Laravel Project
+  ```bash
+  # Local'den:
+  git init
+  git add .
+  git commit -m "Initial commit"
+  
+  # cPanel'de SSH:
+  cd /home/username/public_html/soru-bankasi
+  git clone [repo_url] .
+  ```
+
+Step 2: Composer Install
+  ```bash
+  composer install --no-dev --optimize-autoloader
+  ```
+
+Step 3: .env Setup
+  ```bash
+  cp .env.example .env
+  php artisan key:generate
+  # Edit .env with database credentials
+  ```
+
+Step 4: Database Migration
+  ```bash
+  php artisan migrate --force
+  php artisan db:seed
+  ```
+
+Step 5: Cache
+  ```bash
+  php artisan config:cache
+  php artisan route:cache
+  php artisan view:cache
+  ```
+
+Step 6: Permissions
+  ```bash
+  chmod -R 775 storage/
+  chmod -R 775 bootstrap/cache/
+  ```
+
+Step 7: Cron Setup
+  cPanel Cron Jobs → Add jobs (above)
+
+[4.3] PUBLIC DIRECTORY SETUP
+
+Problem: cPanel genelde /public_html'de host ediyor, Laravel /public dizininde
+Solution: .htaccess redirect
+
+/public_html/.htaccess:
+  ```
+  <IfModule mod_rewrite.c>
+      RewriteEngine On
+      RewriteRule ^(.*)$ /soru-bankasi/public/$1 [L]
+  </IfModule>
+  ```
+
+Veya public_html'de symlink:
+  ```bash
+  ln -s /home/username/public_html/soru-bankasi/public public
+  ```
+
+===================================================================================================
+BÖLÜM 5: CPANEL PERFORMANCE TUNING
+===================================================================================================
+
+[5.1] OPCACHE SETUP
+
+cPanel → MultiPHP INI Editor:
+  - opcache.enable: On
+  - opcache.memory_consumption: 128 (default 64)
+  - opcache.max_accelerated_files: 4000
+  - opcache.revalidate_freq: 0 (production)
+
+[5.2] GZIP COMPRESSION
+
+.htaccess (gzip):
+  ```
+  <IfModule mod_deflate.c>
+      AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+  </IfModule>
+  ```
+
+[5.3] DATABASE QUERY OPTIMIZATION
+
+Migration'larda indexes (ZORUNLU):
+  ```php
+  Schema::create('questions', function (Blueprint $table) {
+      // ... columns ...
+      $table->index(['subject_id', 'status']);  // CRITICAL for queries
+      $table->index(['difficulty_score']);
+  });
+  ```
+
+app/Providers/AppServiceProvider.php:
+  ```php
+  public function boot() {
+      // Enable query logging in production for monitoring
+      if (app()->environment('production')) {
+          DB::listen(function ($query) {
+              if ($query->time > 1000) {  // > 1 second
+                  Log::warning('Slow query: ' . $query->sql, $query->bindings);
+              }
+          });
+      }
+  }
+  ```
+
+[5.4] FILE UPLOAD OPTIMIZATION
+
+Images/Documents için:
+  - Max size: 20 MB (cPanel limit)
+  - Type validation: PDF, JPG, PNG only
+  - Storage path: storage/uploads/ (public_html dışında)
+
+config/filesystems.php:
+  ```php
+  'disks' => [
+      'uploads' => [
+          'driver' => 'local',
+          'root' => storage_path('app/uploads'),
+          'url' => env('APP_URL') . '/storage/uploads',
+          'visibility' => 'public',
+      ],
+  ],
+  ```
+
+Symlink setup:
+  ```bash
+  php artisan storage:link
+  # Creates: public/storage → storage/app/public
+  ```
+
+===================================================================================================
+BÖLÜM 6: CPANEL MONITORING & TROUBLESHOOTING
+===================================================================================================
+
+[6.1] CPANEL ERROR LOGS
+
+Location:
+  - Error log: /home/username/public_html/soru-bankasi/storage/logs/
+  - PHP error: /usr/local/apache/logs/suexec_log (admin panel)
+
+SSH'dan log:
+  ```bash
+  tail -f /home/username/public_html/soru-bankasi/storage/logs/laravel.log
+  ```
+
+[6.2] COMMON CPANEL ISSUES & SOLUTIONS
+
+Issue: "Allowed memory exhausted"
+  Fix: php_value memory_limit 512M (in .htaccess)
+
+Issue: "Composer out of memory"
+  Fix: php -d memory_limit=-1 /usr/local/bin/composer install
+
+Issue: "Connection refused" (database)
+  Fix: Check DB_HOST (localhost? 127.0.0.1?)
+
+Issue: "Cron job not running"
+  Fix: 
+    - Check cPanel Cron → Cron Email Output
+    - SSH: crontab -e → verify command
+    - Check: php artisan tinker (command works?)
+
+Issue: "file_put_contents storage/logs failed"
+  Fix: chmod 775 storage/ && chmod 775 bootstrap/cache/
+
+Issue: "SMTP Connection failed"
+  Fix: Use cPanel sendmail or set MAIL_MAILER=log (dev'de test et)
+
+[6.3] PERFORMANCE MONITORING
+
+Log monitoring (SSH):
+  ```bash
+  # Real-time log tail
+  tail -f storage/logs/laravel.log
+  
+  # Top 10 slow queries
+  grep "Slow query" storage/logs/laravel.log | tail -10
+  
+  # Error count per day
+  grep -c "ERROR" storage/logs/laravel.log
+  ```
+
+cPanel Resource Usage:
+  - cPanel → Resource Usage
+  - Monitor: CPU, memory, I/O
+  - Alert if > 80% consistent
+
+===================================================================================================
+BÖLÜM 7: CPANEL API DEPLOYMENT OPTIMIZATION
+===================================================================================================
+
+[7.1] API OPTIMIZATION FOR SHARED HOSTING
+
+config/app.php:
+  ```php
+  'debug' => false,  # Always false in production
+  'url' => env('APP_URL', 'https://yourdomain.com'),
+  'timezone' => 'UTC',
+  'locale' => 'tr',
+  ```
+
+app/Http/Kernel.php (middleware optimization):
+  ```php
+  protected $middleware = [
+      // CORS, trusted hosts, etc
+  ];
+  
+  # Cache-related middleware
+  'throttle:60,1',  # 60 requests per minute per IP
+  'cache.headers:max_age=3600',  # Cache headers
+  ```
+
+[7.2] RESPONSE CACHING
+
+routes/api.php:
+  ```php
+  Route::get('/leaderboard/global', fn() => Cache::remember(
+      'leaderboard.global',
+      300,  # 5 minutes
+      fn() => LeaderboardService::calculateGlobal()
+  ));
+  ```
+
+[7.3] PAGINATION OPTIMIZATION
+
+Large result sets (1000+ rows):
+  ```php
+  # Controller:
+  $questions = Question::where('subject_id', $subject_id)
+                        ->paginate(50);  # 50 per page (not 100)
+  ```
+
+===================================================================================================
+BÖLÜM 8: CPANEL SECURITY HARDENING
+===================================================================================================
+
+[8.1] .HTACCESS SECURITY
+
+/public/.htaccess:
+  ```
+  # Block access to sensitive files
+  <FilesMatch "\.env">
+      deny from all
+  </FilesMatch>
+  
+  <FilesMatch "^\.">
+      deny from all
+  </FilesMatch>
+  
+  # Force HTTPS
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  ```
+
+[8.2] CPANEL SSL CERTIFICATE
+
+cPanel → SSL/TLS:
+  - AutoSSL (automatic, free via Let's Encrypt)
+  - Or: Import custom certificate
+  - Force HTTPS: Configure redirect
+
+[8.3] .ENV FILE PROTECTION
+
+Ensure .env is:
+  - 1 level above public_html (not accessible via web)
+  - chmod 600 (read-only by owner)
+
+  ```bash
+  chmod 600 .env
+  ```
+
+===================================================================================================
+BÖLÜM 9: CPANEL-SPECIFIC IMPLEMENTATION CHECKLIST
+===================================================================================================
+
+[PRE-DEPLOYMENT]
+  [ ] cPanel account with SSH access
+  [ ] PHP 8.2+ available
+  [ ] MySQL 5.7+ available
+  [ ] Composer installed
+  [ ] SSL certificate configured
+
+[DATABASE]
+  [ ] Create MySQL database via cPanel
+  [ ] Create MySQL user with all privileges
+  [ ] Test connection: mysql -h localhost -u user -p
+  [ ] Update .env with credentials
+
+[LARAVEL SETUP]
+  [ ] Clone/upload Laravel project to /home/username/public_html/
+  [ ] composer install --no-dev
+  [ ] php artisan key:generate
+  [ ] php artisan migrate --force
+  [ ] php artisan db:seed
+
+[CACHING & QUEUE]
+  [ ] config/cache.php → file driver
+  [ ] config/queue.php → database driver
+  [ ] php artisan queue:table (create jobs table)
+  [ ] php artisan migrate
+
+[PERMISSIONS]
+  [ ] chmod 775 storage/
+  [ ] chmod 775 bootstrap/cache/
+  [ ] Verify file uploads work
+
+[CRON JOBS]
+  [ ] cPanel → Cron Jobs
+  [ ] Add: */5 php artisan queue:work --once
+  [ ] Add: 0 2 php artisan cleanup:audit-logs
+  [ ] Add: 0 3 * * 0 php artisan backup:database
+
+[SECURITY]
+  [ ] .env is 1 level above public_html
+  [ ] .htaccess blocks .env access
+  [ ] HTTPS redirect configured
+  [ ] APP_DEBUG=false in production
+
+[PERFORMANCE]
+  [ ] opcache enabled in MultiPHP
+  [ ] gzip compression in .htaccess
+  [ ] Database indexes created
+  [ ] config:cache && route:cache run
+
+[TESTING]
+  [ ] Load app at https://yourdomain.com
+  [ ] Test API endpoints
+  [ ] Check cron jobs running (check logs)
+  [ ] Monitor: top, memory usage
+
+===================================================================================================
+BÖLÜM 10: CPANEL SCALING TIPS (IF NEEDED LATER)
+===================================================================================================
+
+Eğer shared hosting kapasitesini aşarsa (unlikely v1'de):
+
+Option 1: VPS Upgrade (cPanel still used)
+  - More resources, same cPanel interface
+  - 2-4 cores, 4-8GB RAM
+  - Self-managed, more control
+
+Option 2: Cloud Hosting (Heroku, Railway, etc)
+  - Auto-scaling
+  - Redis available
+  - More expensive
+
+Option 3: Multi-Server Setup (Advanced)
+  - Load balancer + app servers
+  - Separate database server
+  - Redis cache server
+  - Not recommended for v1
+
+For v1, shared hosting (1 server) is fine.
+
+===================================================================================================
+BÖLÜM 11: CPANEL QUICK REFERENCE
+===================================================================================================
+
+SSH Login:
+  ssh -i /path/to/key username@domain.com
+
+Laravel Commands:
+  php artisan migrate --force
+  php artisan cache:clear
+  php artisan queue:work --once
+  php artisan config:cache
+  php artisan tinker
+
+File Permissions:
+  chmod 775 storage/
+  chmod 775 bootstrap/cache/
+
+View Logs:
+  tail -f storage/logs/laravel.log
+
+Database Backup:
+  mysqldump -u user -p database > backup.sql
+
+Composer Update:
+  cd /home/username/public_html/soru-bankasi
+  composer install --no-dev --optimize-autoloader
+
+===================================================================================================
+PROMPT FOR CURSOR:
+
+"cPanel/Shared hosting'e özel Laravel implementasyonu yap:
+
+1. Database Queue (Redis yok)
+2. File cache (CACHE_DRIVER=file)
+3. Database migrations (20 tablo)
+4. Cron-based leaderboard snapshot
+5. .env for shared hosting
+6. .htaccess optimization
+7. Security: .env protection, SSL
+8. Console commands: cleanup, backup
+9. Performance tuning: indexes, opcache
+
+Tüm dosyaları oluştur:
+- app/Console/Commands/LeaderboardSnapshot.php
+- app/Console/Commands/CleanupAuditLogs.php
+- app/Console/Commands/BackupDatabase.php
+- .env.example (cPanel values)
+- .htaccess (gzip, HTTPS redirect)
+- config/queue.php (database)
+- config/cache.php (file)
+
+cPanel SSH setup instructions ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════

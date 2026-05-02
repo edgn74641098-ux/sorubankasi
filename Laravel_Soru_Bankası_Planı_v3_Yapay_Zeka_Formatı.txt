@@ -1,0 +1,2216 @@
+═══════════════════════════════════════════════════════════════════════════════════════════════
+LARAVEL TABANI SORU BANKASI UYGULAMASI - YAPAY ZEKA UYUMLU PLAN (v3)
+Production-Ready, Best Practice'ler Uyarında Organize Edilmiş
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[NASIL KULLANIRIM?]
+Her bölümün altında "PROMPT FOR AI:" bulunmaktadır. Bu prompt'u doğrudan ChatGPT, Claude veya 
+başka bir yapay zekaya kopyalayıp yapıştırabilirsiniz. Yapay zeka size o bölüme ait detaylı 
+kodlar, konfigürasyonlar ve implementasyon adımlarını verecektir.
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 1: EXECUTIVE SUMMARY (İcra Özeti)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[AMAÇ]
+Laravel tabanlı, cloud-ready, ölçeklenebilir bir soru bankası uygulaması geliştirmek. 
+Öğrenciler testler çözer, editörler soruları yönetir, adminler sistemi kontrol eder.
+
+[HEDEF KULLANICI]
+- Öğrenciler (1000+)
+- Editörler (10-20)
+- Adminler (2-3)
+
+[KRİTİK İŞLEVLER]
+1. Test çözme (20 soru / 30 dk)
+2. Dinamik zorluk skoru
+3. Leaderboard ve sıralama
+4. Kullanıcı soru önerisi + onay
+5. Soru bankası yönetimi
+6. İstatistik ve raporlama
+
+[BAŞLANGIÇ TARIHI]
+v1: Sprint 0-6 (9 hafta)
+v1.1: Sonraki 4 hafta
+
+[BÜTÇE / KAPASITE]
+- 300 concurrent test
+- 1000+ kullanıcı
+- cPanel/Shared hosting'de çalışabilir
+
+---
+
+PROMPT FOR AI:
+"Laravel tabanlı soru bankası uygulamasının executive summary'sini hazırla. Uygulamanın amacı: 
+öğrenciler testler çözer (20 soru/30 dk), dinamik zorluk skoru, leaderboard, kullanıcı soru önerisi, 
+yönetim paneli. 1000+ kullanıcı, 300 concurrent test kapasitesi. cPanel/shared hosting hedefi. 
+V1 9 haftalık sprint planı. Executive summary'yi stakeholder'lara sunabileceğim şekilde hazırla."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 2: BUSINESS REQUIREMENTS (İş Gereksinimleri)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[KULLANICI ROLLER VE YETKILERI]
+
+Admin (1-2 kişi):
+  - Tüm sistem yönetimi
+  - Kullanıcı/rol yönetimi
+  - Soru CRUD + versioning + rollback
+  - Import yönetimi
+  - Ayar yönetimi (kritik ayarlar = şifre doğrulama)
+  - Bakım modu
+  - Yedekleme
+  - Audit log görüntüleme
+  - Spot-check kuyruk (kalite kontrolü)
+
+Editor (10-20 kişi):
+  - Soru ekleme/düzenleme (kendi sorularını)
+  - Kullanıcı soru onay/red (zorunlu gerekçe)
+  - Kalite kuyruğu inceleme
+  - Import manual_review kuyruk
+  - Soru itiraz inceleme
+  - Leaderboard (salt okunur)
+
+Kullanıcı (1000+):
+  - Test çözme
+  - Soru gönderme (günde max 20)
+  - Kendi istatistiklerini görme
+  - Leaderboard görüntüleme
+  - Soru itiraz + zorluk puanı (P1)
+
+[ÜRÜN RULES (Kesin Scope)]
+
+Test Yapısı:
+  - 20 soru / 30 dakika
+  - 5 şıklı çoktan seçmeli (A-E)
+  - Puanlama: Doğru +5, Yanlış 0, Boş 0 (max 100 puan)
+  - Test Feedback: INSTANT_FEEDBACK_LOCKED | DELAYED_FEEDBACK | NO_FEEDBACK (admin seçer)
+
+Soru Türleri (v1):
+  - Sadece 5 şıklı çoktan seçmeli
+  - Soru metni: 20-4000 karakter
+  - Açıklama: Zorunlu, min 20 karakter
+  - Zorluk skoru: 1.0-10.0 (dinamik, Bayesian smoothing)
+
+Soru Durumları:
+  - pending: İlk gönderim
+  - approved: Editör onayladı
+  - rejected: Editör/Admin reddetti
+  - admin_review: Kalite eşiği başarısız
+  - archived: Eski soru
+
+Test Başlangıç Modları:
+  - Rastgele: Ders havuzundan rasgele 20 soru
+  - Zorluk: Kullanıcı seçen aralıktan 20 soru
+  - Takıldıklarım: Yanlış yapılan sorulardan öncelik, fallback algoritmasıyla rastgele tamamlama
+
+Leaderboard Kuralları:
+  - Genel: Son 30 gün, min 3 geçerli test
+  - Ders Bazlı: İlgili derste son 30 gün, min 3 geçerli test
+  - Tie-breaker: Puan > Yanlış Sayısı az > Bitirme zamanı erken > Hesap eski
+
+Kullanıcı Katkı Ödülü:
+  - Onaylanan her soru: +10 puan
+  - Reddedilen soru: Puan yok
+  - Soru geri alındığında: +10 puan kaldırılır
+
+---
+
+PROMPT FOR AI:
+"Şu business requirements'ı bir BRD (Business Requirements Document) formatında detaylandır:
+- 3 rol (Admin, Editor, User) ve yetkileri
+- Test yapısı: 20 soru, 30 dk, 5 şık, puanlama: +5/0/0
+- Soru durumları ve geçişleri
+- 3 test başlangıç modu ve algoritmaları
+- Leaderboard eligibility kuralları ve tie-breaker
+- Kullanıcı katkı ödül sistemi (+10 puan)
+Her kuralı madde madde listele, ekran mockup'ları için notlar ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 3: FUNCTIONAL REQUIREMENTS (Fonksiyonel Gereksinimler)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[TESTİN YAŞAM DÖNGÜSÜ]
+
+1. Kullanıcı ders seçer → Test başlat modal açılır
+2. Mod seçer (Rastgele / Zorluk / Takıldıklarım)
+3. Sistem 20 soru oluşturur, test başlar
+4. 30 dk countdown başlar (sunucu zamanı tabanlı)
+5. Kullanıcı soruları cevaplar:
+   - INSTANT_FEEDBACK_LOCKED: Cevap anında gösterilir, kilitlenir
+   - DELAYED_FEEDBACK: Geri bildirim yoktur, sonda gösterilir
+6. Süre dolunca test otomatik sonlanır veya kullanıcı bitir butonu basabilir
+7. Sonuç ekranı: Puan + Detay (doğru/yanlış/boş)
+8. User profile'da istatistik güncellenir
+
+[SORU YÖNETIM AKIŞI]
+
+Adminler / Editörler tarafından soru ekleme:
+  1. Soru formu (metni, 5 şık, doğru cevap, açıklama)
+  2. Validation (metni 20-4000 char, açıklama min 20 char, şıklar boş değil)
+  3. Soru immediately "approved" status'unda kaydedilir (admin/editör sorularında quality check yok)
+
+Kullanıcıdan gelen soru:
+  1. Kullanıcı formu gönderir → pending status
+  2. Editör panelinde "Bekleyen Sorular" kuyruğu
+  3. Editör onaylarsa → Auto kalite eşik kontrolü:
+     - Başarılı: approved + +10 puan → questions tablosuna kaydedilir
+     - Başarısız: admin_review (admin spot-check kuyruğu)
+  4. Admin inceleyip onay/red verir
+  5. Editör reddetme: Zorunlu gerekçe + rejection logu
+
+Soru Versiyonlama:
+  - Her değişiklikte version kaydı oluşur
+  - Admin rollback yapabilir
+  - Rollback sonrası: Etkilenen testler flaglenir + notification gönderilir
+
+Import (CSV/XLSX):
+  1. Dosya yükle (max 20 MB, 1000 satır)
+  2. Parse ve validation
+  3. Önizleme (hata raporuyla)
+  4. İdempotency: MD5 hash (skip | merge | manual_review seçim)
+  5. Confirm ve kaydet
+
+[LEADERBOARD SNAPSHOT]
+  - Her 5 dakikada bir async job çalışır
+  - Global ve subject-wise snapshot'lar hesaplanır
+  - Eligibility check: 30 gün, min 3 test
+  - Tie-breaker uygulanır
+
+[SORU İTİRAZ VE KALITE]
+  - Kullanıcı test sırasında soru İtiraz ikonuna tıklayabilir
+  - Kategori: Yanlış Cevap | İfade Belirsizliği | Yazım Hatası | Diğer
+  - Editör panelinde "İtiraz Kuyruğu"
+  - Editör: Çöz veya Reddet (karar logu)
+
+Kalite Kuyruğu:
+  - Metrik: wrong_rate = wrong_count / (correct_count + wrong_count)
+  - Eşik (30+ deneme sonrası): wrong_rate < 0.20 veya > 0.75
+  - Admin dashboard'da iki kart: "Çok Kolay" ve "Çok Zor"
+
+---
+
+PROMPT FOR AI:
+"Aşağıdaki fonksiyonel gereksinimler için detaylı use case'ler yaz:
+1. Test başlat ve çöz (3 mod: rastgele/zorluk/takıldıklarım)
+2. Sonuç hesaplama ve istatistik güncelleme
+3. Kullanıcı soru önerisi: gönder → onay → +10 puan
+4. Import: yükle → parse → önizleme → idempotency (skip/merge/manual_review)
+5. Soru versiyonlama ve rollback (race condition handling)
+6. Leaderboard snapshot ve eligibility kontrolü
+7. Soru itiraz akışı
+
+Her use case için:
+- Actor (kim yaptı)
+- Precondition (başlamadan önce)
+- Main flow (happy path)
+- Alternative flows (edge case'ler)
+- Postcondition (sonuç)
+- Error handling"
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 4: NON-FUNCTIONAL REQUIREMENTS (Non-Fonksiyonel Gereksinimler)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[PERFORMANS]
+- Concurrent aktif test: 300
+- Response time (P95): < 500ms
+- Leaderboard recalc: 5 dakikada 50+ queries
+- Test sonuçlandırma: < 2 saniye
+- Soru arama: < 1 saniye
+
+[ÖLÇEKLENEBILIRLIK]
+- Veritabanı: MySQL 5.7+ (standart shared hosting)
+- Cache: Redis (optimal) veya File cache (fallback)
+- Queue: Database Queue (v1) → Redis Queue (v1.1+)
+- Connection pool: 50-100 (shared hosting'de 50 başlanır)
+- Async jobs: Leaderboard snapshot, import, email, audit cleanup
+
+[KULLANICILIK]
+- Responsive: Desktop first, mobile uyumlu
+- Erişilebilirlik: WCAG 2.1 AA (renkler + text + ikon çiftleri)
+- Yazı boyutu: User seçilebilir (Küçük/Orta/Büyük)
+- Load time: < 3 saniye (initial page)
+
+[GÜVENLIK]
+- Authentication: Email/şifre + email doğrulama zorunlu
+- Authorization: Role-based access control (Policy/Gate)
+- Login rate limit: 5 deneme / 15 dk → 15 dk lockout
+- CSRF protection: Token-based (GET /csrf-token → X-CSRF-Token header)
+- XSS prevention: Blade auto-escaping + sanitization (import soru metni)
+- SQL injection: Query Builder + prepared statements (varsayılan Laravel)
+- Audit logging: Tüm kritik işlem audit log'a kaydedilir (90 gün retention)
+- Admin şifre doğrulama: Kritik ayarlar = 10 dk TTL + multi-tab per-window
+
+[VERI KALİTESİ]
+- Soru metni: 20-4000 karakter
+- Açıklama: Zorunlu, min 20 karakter
+- Tüm 5 şık doldurulmuş
+- Import validation: Satır bazında error raporlama
+- Idempotency: MD5 hash (subject_id + soru metni)
+
+[UYGUNLUK]
+- GDPR: Kullanıcı verisi silme seçeneği (future)
+- Veri saklama: 90 gün audit log, 24 ay test history, versiyonlar 12 ay
+- Backup: Manual + Automatic (capability check ile)
+- Yedekleme testi: Staging'te periyodik restore testi
+
+---
+
+PROMPT FOR AI:
+"Non-functional requirements belgesini hazırla:
+- Performans: 300 concurrent, response time < 500ms, leaderboard 5 min recalc
+- Ölçeklenebilirlik: MySQL, Redis cache, Database queue, connection pool tuning
+- Kullanicilik: Responsive, WCAG 2.1 AA, yazı boyutu seçeneği, < 3s load
+- Güvenlik: Email doğrulama, role-based access, rate limit (5/15min), CSRF token, XSS sanitization, audit log (90 gün)
+- Veri kalitesi: Validation rules, import error reporting, idempotency (MD5 hash)
+- Uygunluk: GDPR, veri saklama policy (90d audit, 24m test, 12m version), backup & restore test
+
+SLA ve success metrics'i de ekle (uptime 99.5%, P95 response < 500ms, deployment time < 30 min)."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 5: TECHNOLOGY STACK (Teknoloji Seçimleri)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[BACKEND]
+- Framework: Laravel 10+ (LTS)
+- Language: PHP 8.2+
+- Database: MySQL 5.7+ (standart shared hosting)
+- Queue: Laravel Database Queue (v1) → Redis (v1.1+)
+- Cache: Redis (optimal) | File (fallback)
+- Authentication: Laravel Auth (built-in)
+- API: RESTful + JSON
+
+[FRONTEND]
+- Templates: Blade (server-side rendering)
+- CSS Framework: Bootstrap 5 / Tailwind (hosting uyumlu, Node bağımlılığı minimal)
+- JavaScript: Vanilla JS (framework-free, minimal)
+- Responsiveness: Mobile-first + desktop uyumlu
+
+[HOSTING]
+- cPanel / Standart PHP hosting
+- Apache + PHP 8.2+
+- MySQL 5.7+
+- SSH access (migrations için)
+- Cron support (leaderboard snapshot, cleanup jobs)
+
+[MONITORING & LOGGING]
+- Error tracking: Sentry (optional, v1.1+)
+- Logging: Laravel logging (files / Stackdriver)
+- Monitoring: Application performance monitoring (New Relic optional)
+
+[DEVELOPMENT TOOLS]
+- Version control: Git (GitHub / GitLab)
+- CI/CD: GitHub Actions / GitLab CI (basic)
+- Testing: PHPUnit (unit/feature tests)
+- Code quality: Laravel Pint (code style), PHPStan (static analysis)
+
+---
+
+PROMPT FOR AI:
+"Teknoloji stack belgesini detaylandır:
+- Backend: Laravel 10+, PHP 8.2+, MySQL 5.7+, Database Queue, Redis/File cache
+- Frontend: Blade templates, Bootstrap 5 / Tailwind, minimal JavaScript
+- Hosting: cPanel / shared hosting, Apache, PHP 8.2+, MySQL, SSH, cron
+- Monitoring: Sentry (optional), Laravel logging, APM (optional)
+- DevTools: Git, GitHub Actions (basic CI/CD), PHPUnit, Laravel Pint, PHPStan
+
+Kurulum adımları, version compatibility matrix, ve fallback stratejileri ekle.
+cPanel hosting'de çalışabilmesi için özel notlar ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 6: ARCHITECTURE (Mimari Tasarım)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[APPLICATION ARCHITECTURE]
+
+Monolithic Approach (v1):
+  - Single Laravel application
+  - BLL (Business Logic Layer): Service classes
+  - DAL (Data Access Layer): Models + Repositories
+  - Controller: Thin controllers, business logic'i service'ye ver
+
+Layered Architecture:
+  - Controller → Service → Repository → Model → Database
+  - Policy/Gate: Authorization rules
+  - Middleware: CSRF, Rate limit, Auth
+
+[FOLDER STRUCTURE]
+
+app/
+  ├── Http/Controllers/
+  │   ├── Auth/
+  │   ├── Test/
+  │   ├── Question/
+  │   ├── Admin/
+  │   └── ...
+  ├── Services/
+  │   ├── TestGenerationService.php
+  │   ├── LeaderboardService.php
+  │   ├── QuestionImportService.php
+  │   ├── DifficultyScoreService.php
+  │   ├── LoginSecurityService.php
+  │   └── ...
+  ├── Repositories/
+  │   ├── QuestionRepository.php
+  │   ├── TestRepository.php
+  │   ├── UserRepository.php
+  │   └── ...
+  ├── Models/
+  ├── Policies/
+  ├── Events/
+  ├── Listeners/
+  ├── Jobs/
+  │   ├── CalculateLeaderboardSnapshot.php
+  │   ├── ProcessQuestionImport.php
+  │   ├── CleanupAuditLogs.php
+  │   └── ...
+  ├── Mail/
+  └── Exceptions/
+
+database/
+  ├── migrations/
+  │   ├── 2026_01_01_users_create.php
+  │   ├── 2026_01_02_roles_create.php
+  │   ├── 2026_01_03_subjects_create.php
+  │   ├── 2026_01_04_questions_create.php
+  │   ├── 2026_01_05_tests_create.php
+  │   ├── 2026_01_06_leaderboard_snapshots_create.php
+  │   ├── 2026_01_07_audit_logs_create.php
+  │   └── ...
+  ├── seeders/
+  │   ├── RoleSeeder.php
+  │   ├── AdminUserSeeder.php
+  │   ├── SubjectSeeder.php
+  │   └── ...
+
+resources/
+  ├── views/
+  │   ├── auth/
+  │   ├── test/
+  │   ├── dashboard/
+  │   ├── admin/
+  │   └── layouts/
+  └── css/
+      └── app.css
+
+[DATABASE ARCHITECTURE]
+
+Entity-Relationship Diagram:
+  - users (role_id FK)
+  - roles
+  - subjects
+  - questions (subject_id FK, created_by FK, approved_by FK)
+  - tests (user_id FK, subject_id FK)
+  - test_items (test_id FK, question_id FK)
+  - user_subject_stats (user_id FK, subject_id FK) - CACHED
+  - leaderboard_global_snapshots
+  - leaderboard_subject_snapshots
+  - question_versions (question_id FK, changed_by FK)
+  - user_submitted_questions (user_id FK, subject_id FK)
+  - audit_logs (actor_id FK)
+  - settings (key unique)
+  - question_reports (user_id FK, question_id FK) - P1
+  - question_difficulty_ratings (user_id FK, question_id FK) - P1
+
+[DATA FLOW]
+
+Test çözüm flow:
+  1. Client: POST /tests/{id}/answer (question_id, user_answer)
+  2. Server: 
+     - Validate: Test still active, question belongs to test
+     - Save: test_items.user_answer, test_items.answered_at
+     - Calculate: is_correct, awarded_points
+     - Response: {is_correct, feedback (if INSTANT_FEEDBACK_LOCKED)}
+  3. Test bitiminde: POST /tests/{id}/finish
+     - Calculate: score, correct_count, wrong_count, blank_count
+     - Update: user_subject_stats
+     - Queue: Leaderboard snapshot job (async)
+     - Response: {score, details}
+
+Leaderboard flow:
+  1. Async Job (every 5 min): CalculateLeaderboardSnapshot
+  2. Query: SELECT users filtered by eligibility (30 days, 3 tests)
+  3. Calculate: score (test bazında), rank
+  4. Insert/Update: leaderboard_global_snapshots, leaderboard_subject_snapshots
+  5. Client: GET /leaderboard/global
+     - Return: cached snapshot (< 5 min old)
+     - User's current rank: GET /leaderboard/me (real-time calc)
+
+---
+
+PROMPT FOR AI:
+"Mimari tasarım belgesini hazırla:
+1. Monolithic + layered architecture (Controller → Service → Repository → Model)
+2. Folder structure (app/, database/, resources/ dizinleri)
+3. Entity-Relationship diagram (11 tablo, FK'ler ve indeksleri)
+4. Data flow patterns (test çözüm, leaderboard, import, soru onay)
+5. Design patterns (Service pattern, Repository pattern, Event/Listener, Job/Queue)
+6. Caching strategy (Redis/File, TTL)
+7. Error handling ve exception mapping
+
+ERD için ASCII diagram çiz, flow'lar için sequence diagram'lar ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 7: DATA MODEL (Veri Modeli - Kesin Şema)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[TABLO LISTELERI VE ŞEMALARI]
+
+Tüm tablolar detaylı olarak şu şekildedir:
+
+1. roles
+   - id (PK), name (UNIQUE), created_at
+
+2. users
+   - id (PK), role_id (FK), name, email (UNIQUE), password, email_verified_at,
+     total_score (default 0), created_at, updated_at
+
+3. subjects
+   - id (PK), name, slug, is_active (default true), created_at, updated_at
+
+4. questions
+   - id (PK), subject_id (FK), created_by (FK), approved_by (FK),
+     source_type (ENUM: admin|editor|user_submission|import),
+     question_text, option_a, option_b, option_c, option_d, option_e,
+     correct_option (ENUM: A|B|C|D|E),
+     explanation_text, difficulty_score (DECIMAL 3.1, default 5.0),
+     correct_count (INT, default 0), wrong_count (INT, default 0),
+     status (ENUM: pending|approved|rejected|archived|admin_review),
+     created_at, approved_at, current_version (INT, default 1)
+   - INDEXES: (subject_id, status), (created_by, status), (difficulty_score)
+
+5. question_import_batches
+   - id (PK), uploaded_by (FK), file_name, file_type (CSV|XLSX),
+     total_rows, success_rows, failed_rows, status,
+     created_at, completed_at
+
+6. question_import_errors
+   - id (PK), batch_id (FK), row_number, error_message, raw_payload (JSON)
+
+7. question_import_rows
+   - id (PK), batch_id (FK), question_hash, action (ENUM),
+     matched_question_id (FK, nullable), created_at
+
+8. user_submitted_questions
+   - id (PK), user_id (FK), subject_id (FK), payload_json,
+     status (ENUM: pending|approved|rejected|admin_review),
+     reviewed_by (FK, nullable), reviewed_at, review_note, created_at
+
+9. tests
+   - id (PK), user_id (FK), subject_id (FK), question_count (default 20),
+     duration_minutes (default 30), started_at, ended_at,
+     score (0-100), correct_count, wrong_count, blank_count,
+     status (ENUM: active|finished|aborted), created_at
+   - INDEXES: (user_id, status), (user_id, created_at DESC)
+
+10. test_items
+    - id (PK), test_id (FK), question_id (FK), user_answer (ENUM nullable),
+      is_correct (BOOLEAN), answered_at, awarded_points,
+      rollback_applied (BOOLEAN default false)
+    - INDEXES: (test_id), (question_id)
+
+11. user_subject_stats
+    - id (PK), user_id (FK), subject_id (FK), solved_count, correct_count,
+      wrong_count, blank_count, total_score, last_test_at, updated_at
+    - UNIQUE INDEX: (user_id, subject_id)
+
+12. user_wrong_question_stats
+    - id (PK), user_id (FK), question_id (FK), wrong_count, last_wrong_at
+    - UNIQUE KEY: (user_id, question_id)
+    - INDEXES: (user_id, wrong_count DESC), (user_id, last_wrong_at DESC)
+
+13. leaderboard_global_snapshots
+    - id (PK), user_id (FK), score, rank, snapshot_at
+    - INDEXES: (user_id), (snapshot_at DESC)
+
+14. leaderboard_subject_snapshots
+    - id (PK), user_id (FK), subject_id (FK), score, rank, snapshot_at
+    - INDEXES: (subject_id, user_id), (snapshot_at DESC)
+
+15. question_versions
+    - id (PK), question_id (FK), version_no (INT), changed_by (FK),
+      change_reason, payload_json, created_at
+
+16. audit_logs
+    - id (PK), actor_id (FK), action (ENUM), entity_type (ENUM),
+      entity_id, old_value (JSON), new_value (JSON), reason,
+      ip_address, user_agent, created_at
+    - INDEXES: (actor_id, created_at DESC), (entity_type, entity_id, created_at DESC)
+    - RETENTION: 90 gün auto-delete
+
+17. settings
+    - id (PK), key (UNIQUE), value_type (ENUM: string|integer|boolean|json),
+      value, created_at, updated_at
+
+18. question_reports (P1)
+    - id (PK), user_id (FK), question_id (FK), category (ENUM),
+      note, status (ENUM: open|reviewing|resolved|rejected),
+      reviewed_by (FK), reviewed_at, created_at
+
+19. question_difficulty_ratings (P1)
+    - id (PK), user_id (FK), question_id (FK), rating (INT 1-10),
+      created_at, updated_at
+    - UNIQUE KEY: (user_id, question_id)
+
+20. failed_login_attempts
+    - id (PK), email, ip_address, attempt_count, locked_until, created_at
+
+---
+
+PROMPT FOR AI:
+"Şu 20 tablo için detaylı Laravel migrations'ını yaz:
+[Tüm tabloları sıra sıra kopyala]
+
+Her migration için:
+1. Schema::create() veya Schema::table()
+2. Column'lar: type, nullable, default, unique, index
+3. Foreign keys: references(), on(), cascadeOnDelete()/restrictOnDelete()
+4. Composite indexes ve unique keys
+5. Timestamps, soft delete (varsa)
+6. Comment ve dokumentasyon
+
+Migration isimlerini kronolojik sıraya göre ver (2026_01_01, 2026_01_02, vb).
+Seed'ler için ayrı dosyalar hazırla (RoleSeeder, AdminUserSeeder, SubjectSeeder)."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 8: API DESIGN (API Tasarımı - REST)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[RESTful API Endpoint'leri]
+
+Auth Endpoints:
+  POST /api/auth/register
+    Request: {name, email, password, password_confirmation}
+    Response 201: {user_id, token}
+    Error 422: validation_failed
+
+  POST /api/auth/login
+    Request: {email, password}
+    Response 200: {user_id, token}
+    Error 401: invalid_credentials
+    Error 429: too_many_attempts (rate limit)
+
+  POST /api/auth/password-reset
+    Request: {email}
+    Response 200: {message: "Reset link sent"}
+
+  POST /api/auth/verify-email
+    Request: {token}
+    Response 200: {email_verified}
+
+Test Endpoints:
+  GET /api/subjects
+    Response 200: [{id, name, slug}]
+
+  POST /api/tests/start
+    Request: {subject_id, mode (random|difficulty|wrong_questions), difficulty_min?, difficulty_max?}
+    Response 201: {test_id, questions: [{id, text, options: {A,B,C,D,E}}], started_at, ends_at}
+    Error 409: active_test_exists
+    Error 422: insufficient_questions
+    Error 403: email_not_verified
+
+  GET /api/tests/{id}
+    Response 200: {test_id, status, time_remaining, answered_count}
+
+  POST /api/tests/{id}/answer
+    Request: {question_id, answer: A|B|C|D|E}
+    Response 200: {is_correct, feedback?: {message, correct_answer, explanation}}
+
+  POST /api/tests/{id}/finish
+    Response 200: {score, correct_count, wrong_count, blank_count, test_duration}
+
+  GET /api/tests/{id}/review
+    Response 200: {test_data, questions: [{id, question_text, user_answer, correct_answer, explanation, is_correct}]}
+
+Leaderboard Endpoints:
+  GET /api/leaderboard/global
+    Response 200: {rankings: [{rank, name, score, last_test_date}]}
+
+  GET /api/leaderboard/subject/{subject_id}
+    Response 200: {rankings: [same]}
+
+  GET /api/leaderboard/me
+    Response 200: {user_rank, user_score, total_ranked_users}
+
+User Stats Endpoints:
+  GET /api/me/stats
+    Response 200: {total_score, total_tests, correct_ratio, by_subject: [...]}
+
+  GET /api/me/wrong-questions
+    Query: ?page=1&per_page=50&subject_id=?
+    Response 200: {data: [{question_id, text, wrong_count, last_wrong_at}], total, pages}
+
+Question Submission Endpoints:
+  POST /api/question-submissions
+    Request: {subject_id, question_text, option_a, option_b, option_c, option_d, option_e, correct_option, explanation_text}
+    Response 201: {submission_id, status: pending}
+    Error 422: validation_failed
+    Error 429: daily_limit_exceeded
+
+Admin Endpoints:
+  GET /api/admin/submissions/pending
+    Response 200: {submissions: [{id, user_name, subject, created_at, status}]}
+
+  POST /api/admin/submissions/{id}/approve
+    Response 200: {question_id, user_reward: 10}
+    Side effect: +10 puan kullanıcıya, audit log
+
+  POST /api/admin/submissions/{id}/reject
+    Request: {reason} (zorunlu)
+    Response 200: {reason_logged}
+    Error 400: reason_required
+
+  POST /api/admin/questions/import
+    Content-Type: multipart/form-data
+    Request: {file: CSV/XLSX}
+    Response 200: {batch_id, preview: [{row_no, status, error?: msg}]}
+
+  POST /api/admin/questions/import/{batch_id}/confirm
+    Request: {actions: [{import_row_id, action: skip|merge|manual_review}]}
+    Response 200: {success_count, failed_count, errors: [...]}
+
+  GET /api/admin/settings
+    Response 200: {test_feedback_mode, registration_open, daily_test_limit, ...}
+
+  PUT /api/admin/settings/{key}
+    Request: {password} (kritik ayarlar için), value
+    Response 200: {key, old_value, new_value, changed_by, changed_at}
+    Audit log kaydedilir
+
+---
+
+PROMPT FOR AI:
+"REST API belgesini (OpenAPI/Swagger format) hazırla:
+- Auth: register, login, password-reset, verify-email (+ error codes)
+- Test: start, answer, finish, review (+ 409, 422, 403 errors)
+- Leaderboard: global, subject, me
+- User: me/stats, me/wrong-questions
+- Submission: create
+- Admin: submissions, questions/import, settings
+
+Her endpoint için:
+1. HTTP method, path
+2. Authentication (Bearer token)
+3. Request schema (body/query/path params)
+4. Response schema (200, 201, error codes)
+5. Rate limits
+6. Pagination (varsa)
+7. Örnek request/response (JSON)
+
+Swagger YAML veya OpenAPI 3.0 JSON formatında hazırla."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 9: TEST MOTORU ALGORITMALARI (Kesin Tanımlar)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[MOD 1: RASTGELE TEST]
+1. Ders havuzundan onaylı tüm sorular
+2. 20 tanesini random select
+3. Soru tekrarına izin verilir
+4. Sonuç: 20 soru array
+
+[MOD 2: ZORLUK TEST]
+1. Kullanıcı range seçer (örn. 5-8)
+2. Ders havuzundan difficulty_score aralığında onaylı sorular
+3. 20 tanesini random select
+4. Fallback: Range'den 20 bulunamazsa tüm dersten tamamla
+5. Sonuç: 20 soru array
+
+[MOD 3: TAKIILDIKLARIM - KESIN FALLBACK ALGORITMASI]
+
+Adım 1: Öncelik Havuzu Oluştur
+  - Query: user_wrong_question_stats WHERE user_id = ? AND wrong_count > 0
+  - AND question_id NOT IN (son 72 saat çözülen sorular)
+  - Kalan soru sayısı ≥ 20 ise Adım 3'e git
+
+Adım 2: Kademeli Cooldown İndir
+  - IF soru sayısı < 20:
+    * Cooldown'u 48 saate düşür, tekrar kontrol
+    * IF hala < 20: 24 saate düşür
+    * IF hala < 20: Cooldown tamamen kaldır
+  - Artık yanlış yapılan tüm sorular seçilebilir
+
+Adım 3: Eksik Soruları Tamamla
+  - Remaining = 20 - current_count
+  - SELECT random questions FROM derste onaylı sorular LIMIT Remaining
+  - Total 20'ye tamamla
+
+Adım 4: Başarısızlık Durumu
+  - IF tüm adımlar sonunda < 20:
+    * ERROR: 422 mode_pool_insufficient
+    * Message: "Takıldıklarım modunda yeterli soru yok"
+
+Adım 5: Kısmi Fallback Bildirim
+  - IF Adım 3'te rastgele sorular eklendiyse:
+    * Kullanıcıya mesaj: "Takıldıklarım modunda yeterli soru olmadığı için [X] soru rastgele eklendi"
+
+[ZORLUK SKORU HESAPLAMA]
+
+Başlangıç: 5.0
+
+Metrikler:
+  - correct_count: Doğru sayısı
+  - wrong_count: Yanlış sayısı
+  - attempt_count = correct_count + wrong_count
+  - wrong_rate = wrong_count / attempt_count (0.0 - 1.0)
+
+Bayesian Smoothing (aşırı oynaklık önlemek):
+  smoothed_wrong_rate = (wrong_count + 3) / (attempt_count + 6)
+
+Formül:
+  difficulty_score = CLAMP(1.0, 10.0, ROUND(1.0 + 9.0 * smoothed_wrong_rate, 1))
+
+Sonuç:
+  - 1.0-3.9: Easy (çoğu doğru)
+  - 4.0-6.9: Medium
+  - 7.0-10.0: Hard (çoğu yanlış)
+
+Hibrit Zorluk (P1 - %70 performance + %30 user rating):
+  final_difficulty = ROUND((0.7 * performance_difficulty) + (0.3 * user_rating_avg), 1)
+  Koşul: Min 10 user rating. Aksi takdirde %100 performance.
+
+[PUANLAMAYı]
+
+Formula:
+  - Doğru: +5 puan
+  - Yanlış: 0 puan
+  - Boş: 0 puan
+
+Test Puanı:
+  score = correct_count * 5 (max 100)
+
+Leaderboard Sıralaması:
+  ORDER BY
+    1. score DESC
+    2. wrong_count ASC
+    3. finished_at ASC
+    4. created_at ASC
+
+[LEADERBOARD ELIGIBILITY]
+
+Geçerli Test Tanımı:
+  - status = 'finished'
+  - question_count = 20
+  - duration_minutes ≤ 30
+  - aborted = false
+
+Genel Leaderboard:
+  - Son 30 gün içinde ≥ 3 geçerli test
+
+Ders Bazlı Leaderboard:
+  - İlgili derste son 30 gün içinde ≥ 3 geçerli test
+
+---
+
+PROMPT FOR AI:
+"Algoritma belgesini hazırla:
+1. Test üretim modları (Rastgele, Zorluk, Takıldıklarım)
+   - Takıldıklarım fallback algoritmasını pseudocode'la yaz
+   - Her adımın veritabanı query'sini Laravel Eloquent'te yaz
+
+2. Zorluk skoru hesaplama:
+   - Bayesian smoothing formülü
+   - Hibrit modeli (%70 performance + %30 user rating)
+   - Aşırı oynaklığı önleme mekanizması
+
+3. Puanlama:
+   - Formula: +5/0/0
+   - Leaderboard ORDER BY kuralları
+
+4. Leaderboard eligibility:
+   - Geçerli test tanımı
+   - 30-gün 3-test eşiği
+   - Ders bazlı ayrı eşik
+
+Her algoritmanın Ruby/Python pseudocode'ını, SQL query'sini ve Laravel implementasyonunu göster."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 10: GÜVENLIK VE VALIDASYON (Security & Validation)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[AUTHENTICATION]
+
+Email/Şifre + Email Doğrulama:
+  - Kayıt: email doğrulaması zorunlu (email_verified_at)
+  - Giriş: email_verified_at check → 403 email_not_verified
+
+Şifre Politikası:
+  - Minimum 8 karakter
+  - En az 1 büyük harf
+  - En az 1 sayı
+  - En az 1 özel karakter (!@#$%^&*)
+
+Login Rate Limit:
+  - failed_login_attempts table
+  - 5 başarısız giriş / 15 dakika → account lock
+  - Lock duration: 15 dakika (otomatik açılır)
+
+Session Security:
+  - HTTPOnly cookies
+  - SameSite=Lax (CSRF protection)
+  - Secure flag (HTTPS)
+
+[AUTHORIZATION]
+
+Role-Based Access Control:
+  - Admin, Editor, User roles
+  - Laravel Policy/Gate
+  - Policy::authorize() endpoint'lerde
+
+Yetki Kuralları:
+  - Admin: Tüm yetkiler
+  - Editor: Kendi soruları + kullanıcı soru onay
+  - User: Test çöz, soru gönder, kendi stats
+
+[CSRF PROTECTION]
+
+Strategy: Token-based
+  - GET /csrf-token endpoint'i
+  - Client localStorage'a kaydet
+  - POST request'lerde X-CSRF-Token header'a ekle
+  - Laravel middleware verify CSRF
+
+Alternative: SameSite=Strict cookie (v1.1)
+
+[XSS PREVENTION]
+
+Blade Auto-Escaping:
+  - {{ $variable }} → HTML escaped
+  - {!! $html !!} → Raw (trusted content only)
+
+Import Sanitization:
+  - Soru metni: Alphanumeric + whitelist chars (? ! : ; - , . ( ) [ ] " ')
+  - HTML tag'ler: BLOCK edilir
+  - Spesial karakter: Whitelist yaklaşımı
+
+[SQL INJECTION PREVENTION]
+
+Query Builder:
+  - DB::table('users')->where('id', $id) → Parameterized
+  - Eloquent: User::find($id) → Safe
+  - Raw queries: DB::raw() avoided, Eloquent preferred
+
+[AUDIT LOGGING]
+
+Scope:
+  - Soru onay/red işlemleri
+  - Soru düzenleme
+  - Soru rollback
+  - Kritik ayar değişiklikleri
+  - Admin şifre doğrulama
+  - Soru versiyonlama
+
+Alanlar:
+  - actor_id: Kim yaptı
+  - action: Ne işlem
+  - entity_type: Ne tür kaynak
+  - entity_id: Kaynağın ID
+  - old_value, new_value: Değişim
+  - reason: Gerekçe (red gerekçesi gibi)
+  - ip_address, user_agent
+  - created_at
+
+Retention: 90 gün, auto-delete
+
+[ADMIN KRITIK AYAR KORUMASı]
+
+TTL: 10 dakika
+Multi-tab: Per-window session storage
+Şifre Doğrulama: Modal'de "Şifreni gir"
+Audit Logu: Ayar değişikliği logu
+
+Kritik Ayarlar:
+  - test_feedback_mode
+  - registration_open
+  - maintenance_mode
+  - backup_interval
+  - login_rate_limit
+
+[VERI VALIDASYON]
+
+Form Validation:
+  - Soru metni: 20-4000 chars
+  - Açıklama: 20-4000 chars, required
+  - Şıklar: A-E hepsi required, non-empty
+  - Email: valid email format, unique
+  - Şifre: policy rules
+
+Import Validation:
+  - Dosya: CSV/XLSX, max 20 MB
+  - Satırlar: Max 1000
+  - Her satır: Soru metni, şıklar, doğru cevap, açıklama
+
+---
+
+PROMPT FOR AI:
+"Güvenlik ve validasyon belgesini hazırla:
+1. Authentication:
+   - Email doğrulama zorunlu + 403 error
+   - Şifre politikası (8 char, uppercase, number, special char)
+   - Rate limit (5 attempts / 15 min)
+   - Session security (HTTPOnly, SameSite, Secure)
+
+2. Authorization:
+   - Role-based access control (Admin, Editor, User)
+   - Policy kuralları
+
+3. CSRF/XSS/SQL injection prevention:
+   - CSRF: Token-based strategy
+   - XSS: Blade escaping + sanitization (import)
+   - SQL: Query Builder + Eloquent
+
+4. Audit Logging:
+   - Scope ve alanları
+   - 90-gün retention
+
+5. Admin kritik ayar koruması:
+   - 10 dk TTL
+   - Multi-tab per-window
+   - Password re-verification
+
+Her security mekanizması için:
+- Tehdidi tanımla
+- Çözümü açıkla
+- Laravel implementasyonu kodla
+- Test senaryoları yaz (XSS injection, SQL injection, CSRF bypass attempts)"
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 11: PERFORMANCE & SCALABILITY (Performans ve Ölçeklenebilirlik)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[PERFORMANS TARGETLERİ]
+
+- Response time (P95): < 500ms
+- Test başlatma: < 1 saniye
+- Leaderboard yükleme: < 1 saniye
+- Soru arama: < 1 saniye
+- Initial page load: < 3 saniye
+
+[CONCURRENT CAPACITY]
+
+- 300 aktif test (simultaneous)
+- 1000+ registered users
+- 50+ snapshot/5 min
+- 100+ import/batch
+
+[CACHING STRATEGY]
+
+Leaderboard Snapshot:
+  - Cache type: Database snapshot table + Redis
+  - TTL: 5 dakika
+  - Invalidation: Async job 5 dakikada bir
+  - User's current rank: Real-time calculate (not cached)
+
+Query Results:
+  - User stats: 1 saat cache
+  - Ders listesi: 24 saat cache
+  - Settings: 5 dakika cache
+  - TTL: Ayara bağlı, default 300 saniye
+
+Session Cache:
+  - Laravel sessions: Database (v1) → Redis (v1.1+)
+  - TTL: 2 saatler
+
+[DATABASE OPTIMIZATION]
+
+Indexes (Günü 1'den):
+  - tests (user_id, status)
+  - tests (user_id, created_at DESC)
+  - test_items (test_id)
+  - test_items (question_id)
+  - questions (subject_id, status)
+  - questions (difficulty_score DESC)
+  - user_wrong_question_stats (user_id, wrong_count DESC)
+  - user_wrong_question_stats (user_id, last_wrong_at DESC)
+  - audit_logs (actor_id, created_at DESC)
+  - audit_logs (entity_type, entity_id, created_at DESC)
+
+N+1 Prevention:
+  - Eager loading: with()
+  - Select specific columns: select(['id', 'name'])
+  - Aggregate functions: count(), sum() SQL'de
+
+Connection Pool:
+  - Size: 50-100 (shared hosting 50'den başla)
+  - Timeout: 60 saniye
+  - Max lifetime: 3600 saniye
+
+Query Optimization:
+  - LIMIT WHERE possible
+  - Pagination (100 satır per page)
+  - Slow query log (> 1 saniye)
+
+[QUEUE SYSTEM]
+
+Async Jobs:
+  - LeaderboardSnapshotJob: 5 dakikada bir
+  - ProcessQuestionImportJob: Import batch'leri
+  - SendNotificationJob: Email/notification'ları
+  - CleanupAuditLogsJob: 90 gün eski log'ları
+  - RecalculateUserStatsJob: Gece batch (user_subject_stats)
+
+Queue Driver:
+  - v1: Database queue (simple, hosting-compatible)
+  - v1.1: Redis queue (performance)
+
+Queue Workers:
+  - Dev: `php artisan queue:work`
+  - Production: Supervisor + multiple workers
+
+[LOAD BALANCING]
+
+Single Server Setup (v1):
+  - Shared hosting cPanel
+  - 1 application instance
+  - Database: Shared MySQL
+
+Multi-Server Setup (v1.1+):
+  - Load balancer (Nginx)
+  - 2-3 application servers
+  - Redis shared cache
+  - MySQL replication (master-slave)
+
+[MONITORING & ALERTS]
+
+Metrics:
+  - CPU usage: Alert if > 80%
+  - Memory: Alert if > 85%
+  - Disk space: Alert if > 90%
+  - Response time: Alert if P95 > 1s
+  - Error rate: Alert if > 1%
+  - Queue length: Alert if > 1000
+
+Tools:
+  - Laravel Horizon (queue monitoring)
+  - Telescope (debugging, dev only)
+  - Sentry (error tracking, optional)
+  - New Relic (APM, optional)
+
+[STAGING LOAD TEST]
+
+Setup:
+  - 300 concurrent users
+  - 5 min test duration
+  - Test çözüm, leaderboard, import traffic mix
+
+Metrics:
+  - Response time distribution
+  - Throughput (requests/sec)
+  - Error rate
+  - Resource utilization (CPU, memory, disk)
+
+---
+
+PROMPT FOR AI:
+"Performance & scalability belgesini hazırla:
+1. Performans targetleri (P95 < 500ms, initial load < 3s)
+2. Concurrent capacity (300 active, 1000+ users)
+3. Caching strategy:
+   - Leaderboard snapshot (5 min TTL, Redis + DB)
+   - Query results (user stats 1h, settings 5 min)
+   - Session cache
+4. Database optimization:
+   - Index listesi (12+ indexes)
+   - N+1 prevention (eager loading patterns)
+   - Connection pool tuning (50-100)
+   - Query optimization (LIMIT, pagination, slow query log)
+5. Queue system:
+   - Async jobs (5 types)
+   - v1: Database queue → v1.1: Redis
+   - Worker configuration (Supervisor)
+6. Load balancing (single vs multi-server)
+7. Monitoring:
+   - Key metrics ve alert thresholds
+   - Tools (Horizon, Telescope, Sentry)
+8. Staging load test plan:
+   - 300 concurrent users
+   - Test scenarios (test çözüm, leaderboard, import)
+   - Success criteria
+
+Her bölüm için Laravel kodu ve config örnekleri ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 12: UI/UX DESIGN (Arayüz Tasarımı)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[WIREFRAME VE SCREEN FLOWS]
+
+Auth Screens:
+  1. Kayıt (Register)
+  2. Giriş (Login)
+  3. Email Doğrulama (Verify Email)
+  4. Şifre Sıfırla (Password Reset)
+
+Kullanıcı Screens:
+  1. Ders Listesi (Subject List)
+  2. Test Başlat Modal (Test Start - 3 mode seçimi)
+  3. Test Çözüm Ekranı (Test Taking - 1 soru/page, sticky sayaç)
+  4. Test Sonucu (Test Result - puan, detay)
+  5. Profil İstatistikleri (User Profile Stats)
+  6. En Çok Yanlış 50 Soru (Top 50 Wrong Questions)
+  7. Genel Leaderboard (Global Leaderboard)
+  8. Ders Bazlı Leaderboard (Subject Leaderboard)
+  9. Soru Gönderme Formu (Submit Question - modal)
+  10. Gönderdiğim Sorular Status Takibi (My Submissions)
+
+Admin/Editor Screens:
+  1. Dashboard (KPI kartları, time filter)
+  2. Ders Yönetimi (Subject CRUD)
+  3. Soru Bankası (Question CRUD + version history)
+  4. Bekleyen Sorular (Pending submissions + onay/red)
+  5. Kalite Kuyruğu (Quality queue - too easy / too hard)
+  6. Import (CSV/XLSX upload + preview + idempotency handling)
+  7. Soru İtirazları (Question reports - P1)
+  8. Ayarlar (Settings - kritik ayarlar = şifre doğrulama)
+  9. Audit Log (tüm işlemlerin geçmişi)
+
+[TEST ÇÖZÜM EKRANI - DETAYLTI]
+
+Layout:
+  - Header: Ders adı | Süre (sticky) | Soru No (X/20)
+  - Main: Soru metni + 5 şık (radio button + label)
+  - Footer: [Geri] [İleri] butonları (sticky)
+  - İkonlar: İtiraz (⚑) | Puanla (★) (her sorunun alt köşesi)
+
+Yazı Boyutu Seçeneği:
+  - Sağ üstte: [A-] [A] [A+] butonları
+  - localStorage'a kaydedilir
+  - Defaults: 14px (Orta)
+
+Feedback Display (Mode'a bağlı):
+  
+  INSTANT_FEEDBACK_LOCKED:
+    - Şık tıklanır → Anında arka plan rengini değiştirir (yeşil/kırmızı)
+    - Ikon: ✓ (yeşil) veya ✗ (kırmızı)
+    - Sorunun altında doğru cevap + açıklama gösterilir
+    - Cevap seçimi disabled (kilitli)
+  
+  DELAYED_FEEDBACK:
+    - Şık tıklanır → Seçim kaydedilir, görsel feedback yok
+    - Cevap değiştirilebilir
+    - Test bitiminde detaylı gösterilir
+
+Modal Actions:
+  - İtiraz ikonuna tıklanır → Modal açılır (kategori + açıklama)
+  - Puanla ikonuna tıklanır → Slider modalı (1-10)
+
+Mobil Responsive:
+  - Altta sticky butonlar
+  - Soru metni larger font
+  - Şık butonları full-width
+
+[LEADERBOARD - DETAYLTI]
+
+Layout:
+  - Sekmeler: [Genel] [Ders Seçin ⏷]
+  - Tablo: Rank | Ad | Puan | Son Test Tarihi
+  - Pagination: Top 100, "Daha Fazla" butonu
+
+Ders Dropdown:
+  - Arama: "Matematik" yazılır filtrele
+  - Pin özelliği: Sık kullanılan dersler yukarıda
+  - Mobile: Dropdown, horizontal scroll yok
+
+Zaman Filtresi:
+  - [Bu Hafta] [Bu Ay] [Tüm Zamanlar]
+  - Default: Bu Hafta
+
+[ADMIN DASHBOARD - DETAYLTI]
+
+KPI Kartları (4-5):
+  - Toplam Kullanıcı: 1000
+  - Toplam Soru: 5000
+  - Bekleyen Onay: 25
+  - Günlük Test: 500
+  - Bakım Modunda Aktif Test: 10
+  - Zaman filtresi: [Today] [This Week] [This Month] [All Time]
+  - Trend gösterici: ↑ %5, ↓ %2
+
+Kalite Kuyruğu Kartları (2):
+  - Çok Kolay Sorular: 15 (wrong_rate < 0.20)
+  - Çok Zor Sorular: 30 (wrong_rate > 0.75)
+
+Grafikler:
+  - Test çöz trendi (line chart, 7 gün)
+  - User signup trendi
+  - Soru approval rate
+
+[RENK PALETİ VE İKONLAR]
+
+Renkler:
+  - Doğru: #28a745 (yeşil)
+  - Yanlış: #dc3545 (kırmızı)
+  - Uyarı: #ffc107 (sarı)
+  - Bilgi: #0069d9 (mavi)
+  - Primary: #007bff (mavi)
+  - Secondary: #6c757d (gri)
+
+İkonlar:
+  - Doğru: ✓ (yeşil)
+  - Yanlış: ✗ (kırmızı)
+  - Boş: - (gri)
+  - İtiraz: ⚑ (flag)
+  - Puanla: ★ (star)
+  - Bildirim: 🔔
+  - Ayarlar: ⚙
+
+Typography:
+  - Başlık: 24px, bold
+  - Subheading: 18px, semibold
+  - Body: 14-16px, regular
+  - Caption: 12px, regular
+
+Spacing:
+  - Compact: 8px
+  - Normal: 16px
+  - Spacious: 24px
+
+[RESPONSIVE BREAKPOINTS]
+
+- Desktop: 1200px+
+- Tablet: 768px - 1199px
+- Mobile: < 768px
+
+Mobile Adjustments:
+  - Single column layout
+  - Altta sticky butonlar
+  - Hamburger menu (admin paneli)
+  - Tablo → Card view
+
+[ACCESSIBILITY]
+
+- Color contrast: WCAG 2.1 AA (4.5:1 text, 3:1 graphics)
+- Text alternatives: Alt text for images
+- Icon + text pairs: ✓ + "Doğru" gibi
+- Keyboard navigation: Tab, Enter, Arrow keys
+- Focus indicators: Clear outline
+- Screen reader friendly: Semantic HTML, ARIA labels
+
+---
+
+PROMPT FOR AI:
+"UI/UX design belgesini hazırla:
+1. Screen wireframes (12+ screen):
+   - Auth screens (register, login, email verify, password reset)
+   - User screens (subject list, test start, test taking, result, stats, leaderboard, submissions)
+   - Admin screens (dashboard, question mgmt, submissions, import, settings)
+
+2. Test çözüm ekranı detaylı:
+   - Layout: header (sticky), main, footer
+   - Feedback display (INSTANT vs DELAYED mode)
+   - Modal actions (report, rate)
+   - Mobile responsive
+
+3. Leaderboard detaylı:
+   - Sekmeli yapı
+   - Ders dropdown (arama + pin)
+   - Zaman filtresi
+
+4. Admin dashboard:
+   - KPI kartları (5 tane)
+   - Kalite kuyruğu
+   - Grafikler (trend, signup)
+   - Time filter
+
+5. Renk, tipografi, spacing, responsive breakpoints
+
+6. Accessibility: WCAG 2.1 AA, semantic HTML, ARIA labels
+
+Figma/Wireframe URLs yada ASCII mockups ekle. HTML/Blade template snippet'ler de göster."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 13: IMPLEMENTATION ROADMAP (İmplementasyon Yol Haritası)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[SPRINT PLAN - 9 HAFTA]
+
+Sprint 0 (Hafta 1): Proje Temeli
+  ├─ S0-01: Auth altyapısı (registration, login, email verify)
+  ├─ S0-02: Güvenlik (rate limit, password policy)
+  ├─ S0-03: Sistem ayarları (settings table, admin panel)
+  └─ Deliverable: Kullanıcı registry, auth flow
+
+Sprint 1 (Hafta 2-3): Çekirdek Domain
+  ├─ S1-01: Ders ve Soru modeli
+  ├─ S1-02: Test ve test_items
+  ├─ S1-03: Test modları (rastgele, zorluk, takıldıklarım)
+  ├─ S1-04: Timer ve cevaplama motoru
+  └─ Deliverable: Test başlat, cevap kaydet, finish
+
+Sprint 2 (Hafta 4-5): Analitik ve Moderasyon
+  ├─ S2-01: Leaderboard (global + subject, snapshot job)
+  ├─ S2-02: Zorluk skoru ve kalite kuyruğu
+  ├─ S2-03: Kullanıcı soru önerisi + onay akışı
+  ├─ S2-04: Import (CSV/XLSX + idempotency)
+  ├─ S2-05: Versioning + rollback + audit log
+  └─ Deliverable: Complete admin/editor workflow
+
+Sprint 3 (Hafta 6): Feedback Mode ve Optimization
+  ├─ S3-01: Test feedback modes (INSTANT vs DELAYED)
+  ├─ S3-02: Test result screen + user stats
+  └─ Deliverable: Full test lifecycle
+
+Sprint 4 (Hafta 7-8): UI/UX Implementation
+  ├─ S4-01: Test taking screen UI
+  ├─ S4-02: Test start modal
+  ├─ S4-03: Leaderboard UI
+  ├─ S4-04: Admin dashboard
+  └─ Deliverable: Polish + responsive
+
+Sprint 5 (Hafta 9): Security, Testing, Deployment
+  ├─ S5-01: Security hardening (CSRF, XSS, SQL injection)
+  ├─ S5-02: Performance optimization (indexing, caching)
+  ├─ S5-03: Testing suite (unit, feature, integration, security)
+  ├─ S5-04: Deployment checklist
+  └─ Deliverable: Production-ready v1
+
+[GÖREV KARTLARI TEMPLATE]
+
+Sprint 0-01: Auth Altyapısı
+  Description: Kullanıcı registration, login, email verification sistem
+  
+  Tasks:
+    [ ] users tablosu migration
+    [ ] roles ve user_role ilişkisi
+    [ ] Laravel Auth scaffolding
+    [ ] Email verification logic
+    [ ] Password reset flow
+    [ ] Auth controller'ları
+    [ ] Auth routes
+    [ ] Auth tests
+  
+  Acceptance Criteria:
+    - [x] Kullanıcı kaydolabilir (validation: email unique, password policy)
+    - [x] Email doğrulama zorunlu
+    - [x] Giriş yapılabilir (rate limit kontrol)
+    - [x] Şifre sıfırlama çalışır
+    - [x] Default user role atanır
+  
+  Owner: Developer 1
+  Estimated Points: 8
+  Sprint: 0
+
+Sprint 1-03: Test Modları
+  Description: Rastgele, Zorluk, Takıldıklarım modları + fallback algoritması
+  
+  Tasks:
+    [ ] QuestionPoolSelectorService
+    [ ] Rastgele mod (simple SELECT)
+    [ ] Zorluk mod (range filter)
+    [ ] Takıldıklarım mod (priority + fallback adımlar)
+    [ ] user_wrong_question_stats migration
+    [ ] user_recent_question_history migration
+    [ ] Mode seçim UI modal
+    [ ] Tests ve edge case'ler
+  
+  Acceptance Criteria:
+    - [x] Rastgele: 20 soru, soru tekrar mümkün
+    - [x] Zorluk: Aralık seçim → 20 soru
+    - [x] Takıldıklarım: Fallback 5 adım düzgün çalışır
+    - [x] 20 sorya ulaşılamadığında 422 error
+    - [x] Fallback uyarı mesajı gösterilir
+  
+  Owner: Developer 2
+  Estimated Points: 13
+  Sprint: 1
+
+[DEVELOPMENT WORKFLOW]
+
+Günlük:
+  1. Stand-up (15 min): Ne yaptım, ne yapacağım, blocker'lar
+  2. Code: Görev kartındaki task'leri tamamla
+  3. Commit: `[Task-ID] Açıklama` (örn: [S1-03] Takıldıklarım fallback algoritması)
+  4. Pull request: Code review before merge
+  5. Deploy: Staging'e otomatik deploy
+
+Code Review:
+  - Min 1 reviewer
+  - Checklist: Tests passed, no console errors, documentation updated
+  - Approval sonrası merge to main
+
+Testing:
+  - Unit tests: Business logic (service methods)
+  - Feature tests: User workflows (test start → answer → finish)
+  - Integration tests: Stats update, leaderboard recalc
+  - Security tests: XSS, SQL injection, CSRF
+
+Deployment:
+  - Staging: Auto-deploy on main branch push
+  - Production: Manual deployment (Sprint end)
+  - Database migrations: Zero-downtime deployments
+  - Rollback plan: Git revert + database rollback script
+
+---
+
+PROMPT FOR AI:
+"Implementation roadmap belgesini hazırla:
+1. Sprint 0-5 plan (9 hafta, 5 sprint):
+   - Her sprint için görevleri listele
+   - Task breakdown
+   - Deliverable'lar
+
+2. Görev kartı template:
+   - Description
+   - Task checklist
+   - Acceptance criteria
+   - Owner, points, sprint
+
+3. Development workflow:
+   - Daily standup
+   - Code commit message format
+   - Pull request checklist
+   - Code review process
+   - Testing strategy
+   - Deployment stages (staging → prod)
+   - Rollback plan
+
+4. Timeline:
+   - Week-by-week breakdown
+   - Milestone dates
+   - Release dates (v1, v1.1)
+
+5. Resource allocation:
+   - Team size (2-3 dev)
+   - Role assignment
+   - Estimated hours per sprint
+
+Gantt chart veya timeline visualizasyon ekle. Jira/Linear/Asana board setup instructions da ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 14: TESTING STRATEGY (Test Stratejisi)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[TEST PYRAMID]
+
+          /\
+         /  \  E2E & UAT
+        /────\
+       /      \  Feature/Integration
+      /────────\
+     /          \  Unit
+    /────────────\
+
+[UNIT TESTS]
+
+Scope: Business logic, calculations, algorithms
+Tools: PHPUnit
+
+Examples:
+  - Puanlama formülü (doğru +5, yanlış 0, boş 0)
+  - Zorluk skoru (Bayesian smoothing)
+  - Leaderboard tie-breaker
+  - Takıldıklarım fallback algoritması
+  - Import idempotency (MD5 hash)
+  - Rate limit logic
+  - Validation rules
+
+Test Coverage: 80%+ critical paths
+
+[FEATURE/INTEGRATION TESTS]
+
+Scope: User workflows, API endpoints, database operations
+Tools: PHPUnit Feature tests
+
+Examples:
+  - User register → email verify → login
+  - Select subject → Start test (3 modes)
+  - Answer question → See feedback (INSTANT vs DELAYED)
+  - Finish test → Calculate score → Update stats
+  - User submit question → Editor approve → +10 puan
+  - Admin import CSV → Idempotency (skip/merge/manual_review)
+  - Soru rollback → Etkilenen testler flagle
+  - Leaderboard snapshot calculation
+
+Test Coverage: Happy path + alternative flows
+
+[SECURITY TESTS]
+
+Examples:
+  - XSS injection (soru metni'ne <script> tag'i)
+  - SQL injection (search parametresi'ne ' OR '1'='1)
+  - CSRF token missing → 419 error
+  - Rate limit bypass (5+ deneme engellenmeli)
+  - Unauthorized role access (user admin endpoint'e access)
+  - Authentication bypass (token manipulation)
+  - Password policy validation
+
+Tools: Artisan tinker, manual curl requests, OWASP ZAP
+
+[PERFORMANCE TESTS]
+
+Scope: Load testing, stress testing
+Tools: Apache JMeter, K6, Artillery
+
+Scenarios:
+  1. 300 concurrent users starting tests (30 sn)
+  2. Leaderboard snapshot job (50 queries/5 min)
+  3. Bulk import (1000 rows)
+  4. Simultaneous test submissions
+
+Success Criteria:
+  - Response time P95: < 500ms
+  - Error rate: < 1%
+  - CPU: < 80%
+  - Memory: < 85%
+  - No connection pool exhaustion
+
+[USER ACCEPTANCE TESTING (UAT)]
+
+Scenarios:
+  1. End-to-end test çözme (3 modu da test et)
+  2. Soru gönderme → Editör onayı → +10 puan
+  3. Leaderboard sıralaması doğru mu?
+  4. Import CSV → İdempotency → Manual review
+  5. Admin dashboard KPI'ları doğru hesaplanmış mı?
+  6. Mobile responsive çalışıyor mu?
+
+Stakeholders:
+  - Admin / Editor
+  - Sample 10-20 kullanıcı
+
+Duration: 1-2 hafta (Sprint 5 sonu)
+
+[REGRESSION TESTING]
+
+Runs: Her deployment sonrası (staging + production)
+
+Test Suite:
+  - Tüm unit tests (80+ tests)
+  - Tüm feature tests (20+ tests)
+  - Smoke tests (critical paths)
+
+Automated: CI/CD pipeline (GitHub Actions)
+
+[TESTING TOOLS & SETUP]
+
+PHPUnit Config (phpunit.xml):
+  - Test database (SQLite in-memory optimal)
+  - Test database seeding (TestSeeder)
+  - Bootstrap file
+  - Coverage reports (HTML)
+
+GitHub Actions CI/CD:
+  - On: push to main/develop, pull requests
+  - Steps: Install dependencies, Run tests, Generate report
+  - Artifact: Test report HTML
+
+Test Database Seeding:
+  - Minimal data setup (roles, sample questions, users)
+  - Factory pattern for dynamic data generation
+
+---
+
+PROMPT FOR AI:
+"Testing strategy belgesini hazırla:
+1. Test pyramid (unit/feature/integration/e2e/UAT)
+2. Unit tests:
+   - Puanlama formülü, zorluk skoru, leaderboard, fallback algoritması
+   - Import idempotency, rate limit, validation
+   - Code examples (PHPUnit)
+3. Feature/Integration tests:
+   - Auth flow, test lifecycle, submission workflow
+   - Rollback scenario, leaderboard snapshot
+   - 10+ test case'ler
+4. Security tests:
+   - XSS, SQL injection, CSRF, rate limit bypass, unauthorized access
+   - Test senaryoları
+5. Performance tests:
+   - 300 concurrent load, leaderboard job, import bulk
+   - Success criteria (P95 < 500ms, < 1% error)
+6. UAT scenarios (5+ end-to-end flows)
+7. Regression testing (CI/CD automated)
+8. Tools: PHPUnit config, GitHub Actions CI/CD, test database seeding
+
+Her test için kod örneği ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 15: DEPLOYMENT & DEVOPS (Yayın ve DevOps)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[DEPLOYMENT STAGES]
+
+Development:
+  - Local machine
+  - `.env.local` (database, cache, queue)
+  - `php artisan serve`
+
+Staging:
+  - cPanel/Hosting environment (test ortamı)
+  - Database: Separate staging DB
+  - Cache: Redis (if available) or File
+  - Queue: Database queue (development)
+  - Monitoring: Basic logging
+
+Production:
+  - cPanel/Hosting environment (live)
+  - Database: Production MySQL
+  - Cache: Redis (optimal)
+  - Queue: Database queue (v1) → Redis (v1.1+)
+  - Monitoring: Full monitoring + alerts
+
+[DEPLOYMENT CHECKLIST]
+
+Pre-Deployment:
+  [ ] All tests passing
+  [ ] Code review approved
+  [ ] Database migrations tested (staging)
+  [ ] Environment variables configured
+  [ ] Backups taken
+  [ ] Performance baseline established
+
+Deployment:
+  [ ] Pull latest code
+  [ ] Install dependencies: `composer install --no-dev`
+  [ ] Run migrations: `php artisan migrate --force`
+  [ ] Cache config: `php artisan config:cache`
+  [ ] Cache routes: `php artisan route:cache`
+  [ ] Compile assets (if Webpack): `npm run production`
+  [ ] Restart queue workers
+  [ ] Verify health checks
+
+Post-Deployment:
+  [ ] Smoke tests run successfully
+  [ ] Monitor error logs (first 30 min)
+  [ ] Verify leaderboard snapshot job
+  [ ] Check database performance
+  [ ] User traffic normal
+  [ ] No external API failures
+
+Rollback:
+  [ ] `git revert` if code issue
+  [ ] `php artisan migrate:rollback` if migration issue
+  [ ] Restore database backup if data corruption
+  [ ] Verify application health
+
+[ENVIRONMENT CONFIGURATION]
+
+.env.production:
+  APP_ENV=production
+  APP_DEBUG=false
+  APP_KEY=[generated]
+  DATABASE_URL=[production connection]
+  CACHE_DRIVER=redis
+  QUEUE_CONNECTION=database (v1) or redis (v1.1)
+  MAIL_MAILER=sendmail or SMTP
+  LOG_CHANNEL=single or stack
+  SENTRY_DSN=[optional error tracking]
+
+.env.staging:
+  APP_ENV=staging
+  APP_DEBUG=true (for testing)
+  DATABASE_URL=[staging connection]
+  CACHE_DRIVER=file (optional Redis)
+  QUEUE_CONNECTION=database
+  LOG_CHANNEL=daily
+
+[CRON JOBS (scheduled tasks)]
+
+v1 Cron Schedule (`app/Console/Kernel.php`):
+  - LeaderboardSnapshotCommand: Every 5 minutes
+  - CleanupAuditLogsCommand: Every day at 2 AM (90-day purge)
+  - RecalculateUserStatsCommand: Every night at 3 AM
+  - BackupDatabaseCommand: Every day at 4 AM (if automatic backup enabled)
+
+cPanel Cron Setup:
+  * * * * * /usr/bin/php /home/user/app/artisan schedule:run >> /dev/null 2>&1
+
+[QUEUE WORKERS]
+
+v1 Database Queue:
+  - Simple, hosting-compatible
+  - No extra dependencies
+  - Running: `php artisan queue:work --queue=default`
+
+v1.1 Redis Queue:
+  - Better performance
+  - Separate Redis server
+  - Running: `php artisan queue:work redis --queue=default`
+
+Production Queue Setup (Supervisor):
+  - Daemonize: queue worker runs continuously
+  - Auto-restart if crashes
+  - Monitor: htop, ps aux | grep queue:work
+
+Supervisor Config Example:
+  [program:laravel-worker]
+  process_name=%(program_name)s_%(process_num)02d
+  command=php /home/user/app/artisan queue:work --queue=default
+  autostart=true
+  autorestart=true
+  numprocs=2
+  redirect_stderr=true
+  stdout_logfile=/var/log/laravel-worker.log
+
+[DATABASE BACKUP & RESTORE]
+
+Manual Backup (cPanel):
+  - MySQLDump: `mysqldump -u user -p database_name > backup.sql`
+  - Upload to Google Drive / S3 (v1.1+)
+
+Automated Backup (Laravel command + cron):
+  - Command: `php artisan backup:database`
+  - Schedule: Daily at 4 AM
+  - Retention: Last 30 backups
+
+Restore Process:
+  1. Stop application (maintenance mode)
+  2. Restore database: `mysql -u user -p database_name < backup.sql`
+  3. Run pending migrations: `php artisan migrate`
+  4. Clear cache: `php artisan cache:clear`
+  5. Start application
+
+[MONITORING & LOGGING]
+
+Application Logs:
+  - Location: `storage/logs/laravel.log`
+  - Rotation: Daily
+  - Retention: 30 days
+
+Queue Logs:
+  - Location: `storage/logs/queue.log`
+  - Monitor: queue:failed table (`artisan queue:failed`)
+
+Error Tracking (Optional):
+  - Sentry integration
+  - Real-time error alerts
+  - Stack trace capturing
+
+Health Checks:
+  - Database connection
+  - Cache connection
+  - Queue job status
+  - Endpoint: `GET /health` (custom)
+
+[CONTINUOUS INTEGRATION/DEPLOYMENT]
+
+GitHub Actions Workflow:
+  1. Trigger: Push to main or pull request
+  2. Steps:
+     - Checkout code
+     - Install dependencies
+     - Run tests (PHPUnit)
+     - Static analysis (PHPStan)
+     - Code style (Laravel Pint)
+  3. If all pass: Deploy to staging
+  4. Manual approval for production
+
+Workflow File: `.github/workflows/ci.yml`
+
+[SCALING STRATEGY]
+
+v1 (Single Server):
+  - cPanel shared hosting
+  - 300 concurrent → single server limit
+  - Monitor: CPU, memory, disk
+
+v1.1+ (Multi-Server):
+  - Load balancer (Nginx)
+  - 2-3 application servers
+  - Redis shared cache
+  - MySQL replication (master-slave)
+
+Scale-up Points:
+  - CPU > 80% sustained
+  - Memory > 85%
+  - Response time P95 > 1 second
+
+---
+
+PROMPT FOR AI:
+"Deployment & DevOps belgesini hazırla:
+1. Deployment stages (dev/staging/prod):
+   - Environment setup
+   - Database configuration
+   - Cache/Queue strategy
+
+2. Deployment checklist (pre/during/post):
+   - Code merge, migration test, health check
+
+3. .env configuration (staging vs production):
+   - Database, cache, queue, logging, monitoring
+   - Security settings (debug=false, APP_KEY)
+
+4. Cron jobs (scheduled tasks):
+   - Leaderboard snapshot (5 min)
+   - Audit log cleanup (90 days)
+   - User stats recalculation (nightly)
+   - Database backup (daily)
+
+5. Queue worker setup:
+   - v1: Database queue
+   - v1.1: Redis queue
+   - Supervisor daemonization
+
+6. Database backup & restore:
+   - Manual backup (mysqldump)
+   - Automated backup command
+   - Restore procedure (steps)
+
+7. Monitoring & logging:
+   - Application logs, queue logs
+   - Error tracking (Sentry optional)
+   - Health check endpoint
+
+8. CI/CD pipeline:
+   - GitHub Actions workflow
+   - Test → Static analysis → Deploy staging
+   - Manual approval for prod
+
+9. Scaling strategy (single → multi-server)
+
+cPanel hosting özel notları ve shell script'ler ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 16: RISK MANAGEMENT (Risk Yönetimi)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[RISK REGISTER]
+
+| Risk | Severity | Probability | Mitigation |
+|------|----------|-------------|-----------|
+| Database performance degrade (300 concurrent) | High | Medium | Index optimization, connection pool tuning, load test staging |
+| Rollback race condition (soru değiştirilirken, test çözülüyor) | High | Low | Flagging system, atomic transactions, audit log |
+| Import idempotency çalışmıyor (tekrar yükleme sorun) | Medium | Medium | MD5 hash + comprehensive testing |
+| Leaderboard snapshot job crashes | Medium | Medium | Error handling, retry logic, email alert |
+| Test feedback mode çelişkisinden kullanıcı confusion | Medium | High | Clear UI, documentation, in-app tutorial |
+| Takıldıklarım fallback algoritması bug | High | Medium | Pseudocode review, comprehensive unit tests, edge case testing |
+| CSRF attack penetration | High | Low | Token verification, SameSite cookie, security test |
+| XSS injection via soru metni | High | Low | Sanitization, Blade escaping, security test |
+| Rate limit bypass | Medium | Medium | Redis-backed rate limit, comprehensive testing |
+| Email verification bypass | High | Low | Email verification zorunlu, 403 check |
+| Admin password reset abuse | Medium | Medium | Secure token generation, expiration, audit log |
+| Data loss (backup failure) | Critical | Low | Backup testing, verification, multiple backups |
+| Third-party API failure (email service) | Medium | Medium | Fallback mechanism, retry logic |
+| Hosting cPanel limitation (cron, queue) | Medium | High | Database queue (compatible), capability check, fallback |
+| Developer error (SQL, wrong logic) | High | Medium | Code review, testing, static analysis |
+
+[MITIGATION STRATEGIES]
+
+Critical Risks:
+  1. Database performance:
+     → Index from day 1
+     → Staging load test (300 concurrent)
+     → Connection pool tuning
+     → N+1 prevention (eager loading)
+
+  2. Rollback race condition:
+     → Version conflict detection (409 error)
+     → Flagging system (test_items.rollback_applied)
+     → Atomic transaction
+     → Audit log + notification
+
+  3. Data loss:
+     → Daily automated backups
+     → Backup verification (staging restore test)
+     → Multiple backup copies
+     → Retention policy (30+ backups)
+
+High Severity Risks:
+  4. Takıldıklarım algorithm:
+     → Pseudocode review + document
+     → Unit test (6+ scenarios)
+     → Staging test with real data
+     → Edge case handling (< 20 sorya ulaşılamadığında)
+
+  5. CSRF/XSS/Rate limit:
+     → Security test suite
+     → OWASP guidelines review
+     → Manual penetration test
+     → Production monitoring
+
+  6. Hosting cPanel limitations:
+     → Capability check (cron, queue support)
+     → Fallback strategy (manual backup, database queue)
+     → Hosting upgrade path (v1.1+)
+
+[CONTINGENCY PLANS]
+
+If Database Performance Degrades:
+  1. Enable query slow log
+  2. Analyze slow queries
+  3. Add missing indexes
+  4. Increase connection pool if available
+  5. Consider database read replica (v1.1+)
+  6. Revert to previous version if necessary
+
+If Leaderboard Snapshot Fails:
+  1. Alert team via email
+  2. Retry failed job
+  3. Skip snapshot for 5 min
+  4. Use last valid snapshot (fallback)
+  5. Investigate error in logs
+  6. Manual recalculation if needed
+
+If Import Idempotency Fails:
+  1. Rollback transaction
+  2. Log error with batch ID
+  3. Notify admin
+  4. Manual review required
+  5. Prevent duplicate entries
+
+If Backup Fails:
+  1. Alert admin
+  2. Retry next scheduled time
+  3. Log failure
+  4. Manual backup required
+  5. Verify previous backup integrity
+
+[SUCCESS METRICS & MONITORING]
+
+Uptime: Target 99.5%
+- Monitor: Application health check (every 1 min)
+- Alert if: Downtime > 15 min cumulative
+
+Response Time: P95 < 500ms
+- Monitor: Application logs + APM (if available)
+- Alert if: P95 > 1 second for 5 min consecutive
+
+Error Rate: < 1%
+- Monitor: Exception log + Sentry
+- Alert if: Error rate > 2% for 5 min
+
+Test Quality: Pass rate > 95%
+- Monitor: CI/CD test results
+- Alert if: < 90%
+
+User Satisfaction: NPS > 50
+- Monitor: Periodic surveys
+- Alert if: < 40
+
+---
+
+PROMPT FOR AI:
+"Risk management belgesini hazırla:
+1. Risk register (15-20 risk):
+   - Database performance, rollback race condition, import idempotency
+   - Leaderboard snapshot crash, takıldıklarım algorithm bug
+   - CSRF/XSS/Rate limit bypass, email verification bypass
+   - Data loss, third-party API failure, cPanel limitations
+   - Her risk için: Severity, Probability, Mitigation
+
+2. Mitigation strategies (critical risks 3-4):
+   - Database: Indexing, load test, connection pool
+   - Rollback: Version conflict detection, flagging, transaction
+   - Data loss: Backup strategy, verification, retention
+   - Algorithm: Pseudocode review, unit test, staging test
+
+3. Contingency plans (6-7):
+   - Database degrades, snapshot fails, import fails
+   - Backup fails, email service fails
+   - Response time degrades
+
+4. Success metrics:
+   - Uptime: 99.5%
+   - Response time: P95 < 500ms
+   - Error rate: < 1%
+   - Test quality: > 95%
+   - User satisfaction: NPS > 50
+
+5. Monitoring dashboard ve alert thresholds
+
+Her risk'in fallback strategy'sini ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 17: COMMUNICATION & DOCUMENTATION (İletişim ve Dokümantasyon)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[DOCUMENTATION STRUCTURE]
+
+- README.md: Project overview, setup, running locally
+- ARCHITECTURE.md: System design, data flow, patterns
+- API.md: REST endpoints, request/response examples
+- DATABASE.md: Schema diagram, migrations, queries
+- DEPLOYMENT.md: Setup, cron, monitoring, troubleshooting
+- CONTRIBUTING.md: Code style, commit messages, PR process
+- CHANGELOG.md: Version history, breaking changes
+- CODE_OF_CONDUCT.md: Team guidelines
+
+[COMMUNICATION PLAN]
+
+Daily:
+  - Team standup (15 min): Slack or in-person
+  - Updates: What done, what next, blockers
+
+Weekly:
+  - Sprint planning (if sprint boundary)
+  - Sprint review (demo to stakeholders)
+  - Retrospective (lessons learned, improvements)
+
+Bi-weekly:
+  - Stakeholder update meeting (progress, roadmap)
+  - Architecture review (if major changes)
+
+---
+
+PROMPT FOR AI:
+"Communication & documentation belgesini hazırla:
+1. Documentation structure:
+   - README, ARCHITECTURE, API, DATABASE, DEPLOYMENT
+   - CONTRIBUTING, CHANGELOG, CODE_OF_CONDUCT
+
+2. README template:
+   - Project description
+   - Features
+   - Tech stack
+   - Installation (local, staging, production)
+   - Running (dev server, tests)
+   - Directory structure
+
+3. API documentation (OpenAPI/Swagger)
+4. Database schema diagram (ASCII or Mermaid)
+5. Deployment guide (step-by-step)
+6. Contributing guide (code style, git workflow)
+
+7. Communication plan:
+   - Daily standup
+   - Weekly sprint review/retrospective
+   - Bi-weekly stakeholder updates
+
+Markdown template'ler ve examples ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+BÖLÜM 18: POST-LAUNCH ROADMAP (Yayın Sonrası - v1.1+)
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[v1.1 BACKLOG (4-6 hafta sonra)]
+
+P1 Features (High Priority):
+  - Soru itiraz akışı (P1)
+  - Soru zorluk puanlaması + hibrit zorluk (P1)
+  - Medya destekli soru (görsel, ses)
+  - Blueprint test şablonları
+  - Kullanıcı profil gizliliği toggle
+  - Balanced zorluk dağılımı option
+
+Infrastructure:
+  - Redis Queue (Database queue'den migration)
+  - Redis cache optimization
+  - Sentry error tracking integration
+  - Multi-server scaling (load balancer)
+  - MySQL replication (master-slave)
+
+[v1.2+ VISION (6+ ay)]
+
+Gamification:
+  - Daily goals / streak system
+  - Achievement badges
+  - Weekly leaderboard
+  - Level system (beginner → expert)
+
+Social Features:
+  - Kullanıcı yorum sistemi
+  - Likes / reactions on comments
+  - Düello modu (head-to-head test)
+  - Study groups / collaboration
+
+Analytics:
+  - Advanced reporting (admin için)
+  - Student progress tracking (öğretmen için)
+  - Test performance analysis
+  - Common mistakes report
+
+[TECHNICAL DEBT & IMPROVEMENTS]
+
+Current (v1) Limitations:
+  - Single-server deployment
+  - File cache only (Redis recommended)
+  - Database queue (Redis recommended)
+  - No error tracking
+  - Basic monitoring
+  - No API rate limiting
+
+Future Improvements:
+  - Full-text search (Elasticsearch)
+  - Real-time notifications (WebSocket)
+  - Mobile app (React Native / Flutter)
+  - AI-powered question generation
+  - Smart recommendation engine
+
+---
+
+PROMPT FOR AI:
+"Post-launch roadmap belgesini hazırla:
+1. v1.1 backlog (4-6 hafta):
+   - P1 features: Soru itiraz, zorluk puanlaması, medya, blueprint
+   - Infrastructure: Redis, Sentry, multi-server, MySQL replication
+
+2. v1.2+ vision (6+ ay):
+   - Gamification: Daily goals, streaks, badges, levels
+   - Social: Comments, likes, düello, study groups
+   - Analytics: Advanced reporting, progress tracking
+
+3. Technical debt:
+   - Current limitations
+   - Future improvements (ElasticSearch, WebSocket, mobile app, AI)
+
+4. Pricing model (if applicable):
+   - Free tier vs Premium
+   - Feature matrix
+
+5. Success criteria for each version:
+   - v1: Uptime 99.5%, 300 concurrent, response time < 500ms
+   - v1.1: User retention > 60%, daily active users
+   - v1.2+: Gamification engagement increase
+
+Phased rollout strategy ekle."
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+SUMMARY & QUICK REFERENCE
+═══════════════════════════════════════════════════════════════════════════════════════════════
+
+[PLAN STRUCTURE]
+
+1. Executive Summary: Amaç, hedef, başlangıç tarihi
+2. Business Requirements: Roller, ürün rules, scope
+3. Functional Requirements: Use cases, workflows
+4. Non-Functional Requirements: Performans, güvenlik, ölçeklenebilirlik
+5. Technology Stack: Backend, frontend, hosting, tools
+6. Architecture: Layers, patterns, data flow
+7. Data Model: 20 tablo, şemalar, indeksler
+8. API Design: RESTful endpoints, error codes
+9. Test Motor Algoritmaları: 3 mod, zorluk skoru, puanlama
+10. Güvenlik & Validasyon: Auth, CSRF/XSS, audit log
+11. Performance & Scalability: Cache, indexing, queue, monitoring
+12. UI/UX Design: 12+ screens, responsive, accessibility
+13. Implementation Roadmap: 9 hafta, 5 sprint, görev kartları
+14. Testing Strategy: Unit, feature, security, UAT, performance
+15. Deployment & DevOps: Stages, CI/CD, cron, backup
+16. Risk Management: 15+ risk, mitigation, contingency
+17. Communication & Documentation: Docs, daily/weekly meetings
+18. Post-Launch Roadmap: v1.1+, backlog, vision
+
+[KEY DATES]
+
+- Sprint 0: Week 1
+- Sprint 1: Week 2-3
+- Sprint 2: Week 4-5
+- Sprint 3: Week 6
+- Sprint 4: Week 7-8
+- Sprint 5: Week 9
+- Production Release: End of Week 9
+- v1.1 Start: Week 10
+
+[KEY METRICS]
+
+Target Uptime: 99.5%
+Response Time (P95): < 500ms
+Error Rate: < 1%
+Concurrent Users: 300+
+Test Coverage: 80%+
+Code Review: 100% (2+ reviews)
+Deployment Time: < 30 min
+
+[NEXT STEPS]
+
+1. Approve this plan with stakeholders
+2. Assign team members to each sprint
+3. Create Jira/Linear board with sprint 0-5 tasks
+4. Setup GitHub repository + CI/CD pipeline
+5. Setup staging environment
+6. Kickoff meeting (Sprint 0 start)
+7. Daily standups begin
+
+═══════════════════════════════════════════════════════════════════════════════════════════════
+END OF DOCUMENT - v3 (Yapay Zeka Uyumlu Format)
+═══════════════════════════════════════════════════════════════════════════════════════════════

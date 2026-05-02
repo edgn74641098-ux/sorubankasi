@@ -1,0 +1,1775 @@
+Laravel Tabanlı Soru Bankası Uygulaması Planı (v2 - İyileştirilmiş)
+
+⚠️ ÖNEMLİ NOT: Bu dokuman v1 (Orijinal Plan) ile karşılaştırılarak hazırlanmıştır. Tüm belirsizlikler, çelişkiler ve eksiklikler düzeltilmiş, netleştirilmiş ve iyileştirilmiştir. [✓] işareti ile gösterilen bölümler yeni veya ciddi değiştirilmiş bölümlerdir.
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+1) Teknoloji ve Mimari Kararları
+
+Altyapı: PHP Laravel (en popüler tercih) + MySQL 5.7+
+
+Arayüz: Blade + Bootstrap/Tailwind (hosting uyumlu, ekstra Node bağımlılığı minimum tutulabilir)
+
+Rol yapısı: Admin, Editor, Kullanıcı
+
+Kimlik doğrulama: Laravel Auth (email/şifre, şifre sıfırlama, oturum güvenliği)
+
+Hosting hedefi: cPanel/standart PHP hosting (Apache + PHP 8.2+ + MySQL)
+
+Cache Stratejisi: Redis (optimal) veya File cache (fallback)
+
+Queue Driver: Laravel Database Queue (v1), Redis Queue (v1.1+ optimize için)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+Kesinleşen Ürün Kuralları (Scope Freeze v1)
+
+Soru tipi: İlk sürümde sadece 5 şıklı çoktan seçmeli (A-E şıkları zorunlu)
+
+Test puanlama: Doğru +5, Yanlış 0, Boş 0. Maksimum puan: 20 × 5 = 100
+
+Test davranışı (✓ KESIN):
+
+  Test Feedback Modu [✓ NETLEŞTIRILDI - Mutually Exclusive States]:
+    
+    Seçenek 1: INSTANT_FEEDBACK_LOCKED
+      - Kullanıcı soru cevapladığında anında geri bildirim verilir (doğru=yeşil, yanlış=kırmızı, açıklama gösterilir)
+      - Cevap kilitlenir, değiştirilemez
+      - Admin panelden bu mod açıldığında tüm testlerde uygulanır
+      - Varsayılan: KAPAL (başlangıçta bu mod kullanılmaz)
+    
+    Seçenek 2: DELAYED_FEEDBACK
+      - Kullanıcı soru cevaplandıktan sonra geri bildirim gösterilmez
+      - Cevap değiştirilebilir (test bitene kadar)
+      - Test bitiminde tüm sorular doğru/yanlış sonucuyla birlikte detaylı gösterilir
+      - Varsayılan: AÇIK (v1 default modu)
+    
+    Seçenek 3: NO_FEEDBACK
+      - Geri bildirim sonuçtan sonra dahi gösterilmez
+      - Kullanıcı sadece puan ve istatistik görecek
+      - Varsayılan: KAPAL
+
+  NOT: Admin panelden tam olarak BİR mod seçilir. İkisi aynı anda aktif olamaz. Modu değiştirme işlemi audit log'a kaydedilir.
+
+Geri bildirim gösterim kuralları (Seçilen mode göre):
+
+  INSTANT_FEEDBACK_LOCKED seçiliyse:
+    - Soru cevaplandıktan sonra anında: Doğru/Yanlış gösterim (renkli ikon ✓/✗) + doğru cevap + açıklama
+    - Cevap seçimi kilitlenir, tıklanmaz
+
+  DELAYED_FEEDBACK seçiliyse:
+    - Cevaplanan soru'nun altında hiç geri bildirim yoktur
+    - Test bitiminde detaylı sonuç ekranında tüm sorular sırasıyla:
+      * Soru → Kullanıcının cevabı (seçili şık) → Doğru/Yanlış gösterim → Doğru cevap → Açıklama
+
+Süre: Her test 30 dakika, toplam 20 soru
+
+Soru tekrar kuralı (Mode bazında netleştirilmiş) [✓ NETLEŞTIRILDI]:
+
+  Rastgele Mod:
+    - Tüm onaylı sorular kullanılabilir
+    - Tekrar soru gelmesine izin verilir
+    - Daha önce çözdüğü sorular tekrar gelebilir
+
+  Zorluk Derecesine Göre Mod:
+    - Seçilen zorluk aralığındaki onaylı sorular havuzundan seçim
+    - Tekrar soru gelmesine izin verilir
+
+  Takıldıklarım Modu (Yanlış Yapılanlardan Test):
+    - Kullanıcının ilgili derste yanlış yaptığı sorular öncelik verilir
+    - Son 72 saatte çözülen sorular bu modu seçtiğinde exclusion listesine düşer (çözmek için erken)
+    - ÖNEMLİ: Son 72 saat cooldown sadece Takıldıklarım modunda geçerlidir
+
+Onay akışı (Kullanıcı Sorusu) [✓ NETLEŞTIRILDI]:
+
+  Akış:
+    1. Kullanıcı soruyu gönderir → user_submitted_questions tablosuna pending ile kaydedilir
+    2. Editor/Admin soruyu gözden geçirir
+    3. Editör onaylarsa → Otomatik kalite eşik kontrolü yapılır
+    4. Kalite eşiği başarılı ise → Soru approved olur + kullanıcıya +10 puan
+    5. Kalite eşiği başarısız ise → Soru admin_review durumuna geçer
+    6. Admin spot-check kuyruğundan inceleyerek (onay/red) karar verir
+    
+  NOT: Reddedilmiş soruya +10 puan verilmemiş olması önemlidir. Eğer onaydan sonra başka sorun tespit edilip geri alınırsa → Verilen +10 puan user'den geri alınır ve işlem audit log'a kaydedilir.
+
+Leaderboard: Genel ve ders bazlı ayrı listeler
+
+Leaderboard Dahil Edilme Kuralı [✓ KESIN TANIM]:
+  
+  Genel Leaderboard İçin:
+    - Son 30 gün içinde en az 3 GEÇERLI test çözmüş olmak zorunlu
+    - Geçerli test tanımı: status=finished, question_count=20, duration_minutes≤30, aborted=false
+    - Kullanıcı bu şart dışında sıralamada gösterilmez
+
+  Ders Bazlı Leaderboard İçin:
+    - Aynı ders içinde son 30 gün içinde en az 3 GEÇERLI test çözmüş olmak zorunlu
+    - Diğer derslerde başarısız olsa bile, ilgili derste 3 test çözmüş ise o ders leaderboard'unda listelenir
+
+Leaderboard Tie-Breaker Kuralı (Aynı Puan Durumunda Sıralama) [✓ YENİ]:
+  
+  ORDER BY KURALARI (SQL):
+    1. Puan (descending) - Yüksek puan üste
+    2. Wrong_count (ascending) - Yanlış sayısı az olan üste
+    3. Finished_at (ascending) - Testi erken bitiren üste
+    4. Created_at (ascending) - Daha eski üyeler üste (bağlama göre)
+
+Giriş güvenliği (v1):
+
+  Email/şifre + şifre sıfırlama
+  Email doğrulama (email_verified_at) zorunlu - Email doğrulanmadan test başlatılamaz (403 email_not_verified)
+  Login rate limit + progressive lockout: 5 başarısız deneme / 15 dk → Hesap kilitlenir
+  Kilitlenme süresi: 15 dakika (otomatik açılır)
+  Şifre politikası: 
+    - Minimum 8 karakter
+    - En az 1 büyük harf
+    - En az 1 sayı
+    - En az 1 özel karakter (!@#$%^&*)
+
+Import formatı: CSV + XLSX
+
+Import İdempotency Stratejisi [✓ KESIN TANIM]:
+  
+  Hash Hesabı:
+    - question_hash = MD5(TRIM(CONCAT(subject_id, LOWER(soru_metni))))
+    - Deterministic: Aynı soru metni ve ders = Aynı hash
+  
+  Çakışma Yönetimi:
+    - Aynı hash bulunduğunda 3 seçenek sunum:
+      * SKIP: Mevcut soruyu atla
+      * MERGE: Yeni bilgileri mevcut soruya ekle (açıklama/şıklar update olabilir)
+      * MANUAL_REVIEW: Editöre gönder, editör karar versin (approval panel'de özel kuyruğu)
+  
+  Manuel Review Süreci:
+    - Editör panelinde "Import - Manuel İnceleme Kuyruğu" sekmesi
+    - Çakışan soru: Eski vs Yeni yan yana gösterilir
+    - Editör: "Bu soru aynı", "Güncelle", "Yeni soru olarak ekle" seçeneği yapabilir
+
+Kullanıcı katkı ödülü: Onaylanan her kullanıcı sorusuna +10 puan
+
+Ödüllü onay güvenliği (v1):
+
+  Editör onayı sonrası otomatik kalite eşik kontrolü uygulanır
+  Yüksek riskli veya kalite eşiği dışı sorular admin spot-check kuyruğuna düşer
+  
+  Kalite Eşikleri (Kontrol Metrikleri):
+    - Soru metni uzunluğu: 20-4000 karakter arası
+    - Açıklama boş olamaz
+    - Tüm 5 şık doldurulmuş olmalı
+    - Açıklama en az 20 karakter
+    - Soru metni ve şıklar tekrar olmamalı (benzerlik kontrolü)
+
+Kullanıcı soru gönderim limiti: Günlük maksimum 20 soru
+
+Günlük Test Başlatma Limiti [✓ KESIN TANIM]:
+  
+  Soft Limit: Günde 20 test
+  Technical Limit: Dakikada maksimum 5 test
+  
+  Davranış:
+    - 10. test sonrası: "Bugün 10+ test çözdünüz. Dikkat edin!" warning mesajı
+    - 20. test sonrası: "Bugün maksimum test limitine ulaştınız" error mesajı
+    - Soft limit reset saat: Her gün 00:00 UTC
+
+Kayıt modeli: Açık kayıt ve davet kodlu kayıt birlikte desteklenecek, seçim admin ayarı olacak
+
+Leaderboard görünürlüğü: Sadece giriş yapan kullanıcılar görebilecek
+
+Yorum/yarışma modülü: v1 kapsamı dışında, v1.1 sürümüne ertelendi
+
+Test navigasyonu: Kullanıcı test bitene kadar cevaplarını değiştirebilir (DELAYED_FEEDBACK modda)
+
+Test navigasyonu (INSTANT_FEEDBACK_LOCKED modda): Cevaplandıktan sonra değiştirilemez
+
+Süre bitiş davranışı: Süre dolunca test otomatik sonlandırılır, boşlar boş kalır
+
+20 sorudan az onaylı sorusu olan derste test başlatılamaz (422 insufficient_questions)
+
+Test başlatma için minimum soru sayısı: 20 (zorunlu)
+
+Test başlatma modu:
+  
+  Rastgele (varsayılan aktif): Ders havuzundan tamamen rastgele 20 soru
+  
+  Zorluk derecesine göre: Kullanıcı zorluk aralığı seçer (1-10 arası range slider)
+  
+  Takıldıklarım (Yanlış Yapılanlardan Test): [✓ FALLBACK ALGARITMASI KESIN]
+    
+    Fallback Algoritması:
+      
+      Adım 1: Öncelik Havuzu Oluştur
+        - İlgili derste kullanıcının yanlış yaptığı sorular
+        - Son 72 saatte çözülen sorular DIŞLANIR
+        - Kalan soru sayısı ≥ 20 ise Adım 3'e git
+      
+      Adım 2: Kademeli Cooldown İndir
+        - 20 sorya ulaşılamadıysa:
+          * 72 saatlik cooldown'u 48 saate düşür, tekrar kontrol et
+          * Hala 20'den azsa 24 saate düşür, kontrol et
+          * Hala 20'den azsa cooldown'u tamamen kaldır (tüm yanlış sorular kullanılabilir)
+      
+      Adım 3: Eksik Soruları Tamamla
+        - Kalan soruları aynı dersin onaylı rastgele havuzundan ekle
+        - Total 20 sorya ulaşana kadar devam et
+      
+      Adım 4: Başarısızlık Durumu
+        - Tüm adımlar sonunda 20 sorya ulaşılamadıysa:
+          * Error dön: 422 mode_pool_insufficient
+          * Kullanıcıya mesaj: "Takıldıklarım modunda yeterli soru yok. Başka modu deneyin."
+      
+      Adım 5: Kısmi Fallback Bildirilim
+        - Fallback sırasında rastgele sorular eklendiyse kullanıcıya bilgi mesajı:
+          * "Takıldıklarım modunda yeterli soru olmadığı için [X] soru rastgele olarak eklendi"
+
+Zorluk dağılımı: Test üretiminde zorunlu dağılım kuralı yok, tamamen rastgele (v1.1+'de balanced dağılım seçeneği eklenebilir)
+
+Konu etiketi: v1'de etiket bazlı seçim yok, sadece ders bazlı seçim. Etiket sistemi v1.1'de eklenecek
+
+Soru seti: Her kullanıcıya farklı rastgele test seti (same user farklı zamanlar = farklı sorular)
+
+Günlük test limiti: Soft limit 20 test/gün (rate limit enforced)
+
+Sekme değişim davranışı (✓ KESIN TANIM):
+
+  Davranış:
+    - Kullanıcı testte iken başka tab'e veya pencereden ayrılırsa browser focusout event tetiklenir
+    - Client tarafı warning gösterilir: "Testen uzaklaştınız. Lütfen teste dönün."
+    - Olay backend'e loglama event'i gönderilir
+  
+  Kurallar:
+    - İlk 2 uyarı: Soft warning (sadece mesaj gösterilir)
+    - 3. uyarı sonrası (aynı test içinde):
+      * Option A (Soft): Uyarı mesajı devam eder fakat test devam eder
+      * Option B (Hard): Test otomatik olarak sonlandırılır ve puanlama yapılır
+    - v1 Default: Soft (Option A)
+
+Kopan bağlantı: Süre dolana kadar kullanıcı teste kaldığı yerden dönebilir
+
+Test Bağlantı Kesilmesi Sonrası Davranış [✓ KESIN]:
+  
+  Senaryo: Kullanıcı testte iken internet kesilir
+  
+  Davranış:
+    - Backend test'in started_at saatini tutar
+    - Kullanıcı 30 dakika içinde reconnect olursa kalan süreden devam eder
+    - Sunucu tarafı: remaining_time = (started_at + 1800 saniye) - now()
+    - Client tarafı sayaç sinkronize edilir ve devam eder
+    - 30 dakika aşılmışsa test otomatik finished olur
+
+Red gerekçesi: Editör reddederken açıklama zorunlu (400 validation_failed hata kodu)
+
+Kopya soru kontrolü: En az birebir aynı soru kontrolü yapılır (Levenshtein distance <%10)
+
+Soru silme politikası: Silme sadece admin, editör düzenleyebilir
+
+Kullanıcı yönetimi: Sadece admin yetkisi
+
+Rol değişikliği: Sadece admin yapabilir
+
+Toplu işlemler (soru yönetimi): Sadece toplu durum değişikliği (onay/arşiv) - v1 scope
+
+Sonuç ekranı: Skor + tüm sorular için detaylı doğru/yanlış inceleme
+
+Boş Cevapların Sonuç Ekranında Gösterimi [✓ NETLEŞTIRILDI]:
+  
+  Sonuç ekranında şu istatistikler gösterilsin:
+    - Toplam Puan: X / 100
+    - Doğru Cevaplar: Y / 20 (%Y)
+    - Yanlış Cevaplar: Z / 20 (%Z)
+    - Boş Cevaplar: W / 20 (%W)
+    - Toplam = Y + Z + W = 20
+
+  Detaylı Soru Listesi:
+    - Her soru: [Soru No] [Soru Metni] [Kullanıcı Cevabı] [Doğru Cevap] [Açıklama]
+    - Boş soru: "BOŞBIRAKILDI" gösterimi
+    - Renk kodlama: Doğru=Yeşil, Yanlış=Kırmızı, Boş=Gri
+
+Soru aksiyonları (P1):
+
+  Her sorunun alt köşesinde (test çözüm ekranında) İtiraz ve Puanla ikonları bulunur
+  Kullanıcı bu aksiyonları yapmak zorunda değildir (opsiyonel)
+  
+  İtiraz İkonu (Flag):
+    - Kategoriler: Yanlış Cevap / İfade Belirsizliği / Yazım Hatası / Diğer
+    - Kısa açıklama yazılabilir
+    - Gönderildikten sonra editör panelinde review kuyruğuna düşer
+  
+  Puanla İkonu (Star):
+    - 1-10 arası zoom puanı seçim modalı
+    - Aynı kullanıcı aynı soruya sadece 1 puan verebilir (güncellerse son oy geçerli)
+    - Zorluk puanı ortalaması difficulty_score'a %30 katkı sağlar
+    
+Bildirim kanalı (v1): Sadece uygulama içi bildirim (Bell icon navbar'da)
+
+Profil gizliliği (✓ NETLEŞTIRILDI):
+
+  Kural:
+    - Kullanıcının detaylı istatistikleri (çözdüğü sorular, başarı grafikleri, ders bazında başarı) YALNIZCA o kullanıcının kendisine görünür
+    - Leaderboard'da başka kullanıcıların adı ve puanı görülür
+    - Başka kullanıcı profilini tıkladığında: "Bu kullanıcının profili gizlenir" mesajı gösterilir
+  
+  Leaderboard vs Profil Detay:
+    - Leaderboard: Herkese açık (ad + puan)
+    - Profil Detay: Sadece o kullanıcıya
+    - İsteğe bağlı (v1.1): Kullanıcı profil gizliliğini toggle yapabilsin
+
+Hedef altyapı: Paylaşımlı cPanel hosting
+
+Kuyruk sistemi (v1): Laravel Database Queue (v1.1+ için Redis Queue)
+
+Kuyruk İşleri:
+  - Leaderboard snapshot hesapı (async)
+  - Import işlemleri (async, batch)
+  - Email notifications (async)
+  - Audit log cleanup (scheduled)
+
+Yedekleme:
+
+  Yedekleme Stratejisi:
+    - Admin ayarıyla manuel/otomatik seçim
+    - Otomatik mod yalnız capability check başarılıysa aktif olur (cron/queue desteği)
+    - Capability yoksa manuel moda fallback
+  
+  Capability Check:
+    - Sunucu cron job'u çalıştırabiliyor mu?
+    - Queue system bağlantılı mı?
+    - Disk space yeterli mi?
+  
+  Manuel Fallback Davranışı [✓ KESIN]:
+    - Admin panelde "Capability Check Başarısız" uyarısı gösterilir
+    - Manuel yedekleme minimum sıklığı: Haftada 1
+    - İş tavsiyesi yazılır: "Automated backup alınamıyor, lütfen manuel yedekleme yapın"
+    - Failed backup başarısızlığı alert sistemi tetiklenir (admin email)
+    - Staging ortamında capability check test edilir ve başarı/başarısızlık senaryosu dokümante edilir
+  
+  Otomatikte minimum periyot: 1 gün (24 saatte 1 backup)
+  
+  Backup Yedeklemesi:
+    - Veritabanı dump + dosyalar
+    - Uzak storage'a (S3, GDrive gibi) upload edilebilir (v1.1+)
+
+Saat dilimi: Europe/Istanbul
+
+Log saklama: 90 gün (audit_logs, failed_login attempts otomatik cleanup)
+
+Rapor dışa aktarma: v1'de yok (v1.1+)
+
+Soru metni limiti: 4000 karakter
+
+Import dosya limiti: 20 MB
+
+Import satır limiti: 1000 satır
+
+Ayar değişikliği koruması:
+
+  Kritik ayarlar (Admin şifresi tekrar doğrulanır):
+    - Test feedback modu değişikliği
+    - Kayıt modu açık/kapalı değişikliği
+    - Puanlama sistemi değişikliği
+    - Bakım modu açma/kapatma
+    - Login rate limit değiştirme
+  
+  Admin Şifre Doğrulama:
+    - TTL: 10 dakika
+    - Multi-tab davranışı: Her tab ayrı doğrulama ister
+    - Session storage'da flag tutulur (per-window)
+    - 10 dakika sonunda automatic logout
+    - Kritik ayar modalında "Şifreni gir" field'ı tekrar gösterilir
+
+Ayar logları: Eski değer + yeni değer + işlem yapan + zaman bilgisi tutulur
+
+Bakım modu:
+
+  Davranış:
+    - Admin panelden "Bakım Modu" toggle'ı
+    - Açıldığında: Giriş yapmış kullanıcılar "Bakım Modu" mesajı görür
+    - Yeni test başlat isteği: "Sistem bakım halinde, lütfen daha sonra deneyin" (UI uyarısı)
+  
+  Aktif Testler Davranışı [✓ KESIN]:
+    - Bakım modu açıldığında aktif testler iptal EDİLMEZ
+    - Aktif testler DEVAM ETTİRİLİR
+    - Süre dolunca otomatik bitiş yapılır
+    - Admin panelinde "Bakım Modunda Aktif Testler" kartı görülür (live count)
+    - Admin bakım bitiminden sonra manuel "Bakım Modu Kapat" yapabilir
+
+Sistem kapasite hedefi (v1): Aynı anda 300 aktif test
+
+Database Connection Pool Tuning [✓ KESIN]:
+  
+  Bağlantı Pool Boyutu: 50-100 arası (shared hosting için 50 başlanır)
+  Connection Timeout: 60 saniye
+  Connection Keepalive: Etkin
+  Query Timeout: 30 saniye
+  
+  Ağır Operasyonlar Queue'da:
+    - Leaderboard snapshot hesapı (async job)
+    - Toplu import işlemleri (chunked processing)
+    - Email notifications (async)
+    - Audit log cleanup (scheduled job)
+
+Kullanıcı eşzamanlı test kuralı: Bir kullanıcı aynı anda sadece 1 aktif testte olabilir
+
+Eşzamanlı Test Çakışması Durumu [✓ KESIN]:
+  
+  Senaryo: Kullanıcının aktif testi var, yeni test başlatmaya çalışır
+  
+  Davranış:
+    - API döner: 409 active_test_exists
+    - UI'da popup: "Zaten aktif bir testiniz var. Devam Et veya Yeni Test Başlat?"
+    - "Devam Et": Aktif test'in sonlandırılmamış olduğu noktaya dönür
+    - "Yeni Test Başlat": Onay istenir "Mevcut testi iptal edeceksiniz. Emin misiniz?"
+      * "Evet": Eski test abort olur, yeni test başlar
+      * "Hayır": İşlem iptal edilir, eski test devam eder
+
+Geri bildirim/cevap değişimi kuralı (✓ KESIN AÇIKLAMA):
+
+  INSTANT_FEEDBACK_LOCKED modda:
+    - Cevaplanan soru anında geri bildirim verilir
+    - Cevap kilitlenir, değiştirilemez
+
+  DELAYED_FEEDBACK modda:
+    - Cevaplanan soru'nun altında geri bildirim gösterilmez
+    - Cevap değişimi serbest (test bitene kadar)
+    - Geri bildirim stest bitiminde toplu gösterilir
+
+Minimum leaderboard eşiği:
+
+  Son 30 günde en az 3 geçerli test şartı uygulanır
+  Geçerli test: status=finished, question_count=20, duration_minutes≤30, aborted=false
+
+Ders bazlı leaderboard eşiği:
+
+  İlgili derste son 30 günde en az 3 geçerli test çözmüş olmak zorunludur
+  Diğer derslerde başarısız olsa bile, bu ders içinde 3 test = bu ders leaderboard'unda listelenir
+
+Soru versiyonlama (v1) [✓ KESIN TANIM]:
+
+  Soru değişikliklerinde sürüm geçmişi tutulur
+  
+  Rollback Süreci:
+    - Rollback sadece admin tarafından yapılabilir
+    - Rollback yapılırken: Önceki sürüme geri al
+  
+  Rollback Race Condition Senaryosu [✓ KESIN]:
+    
+    Problem: Yayında bir soru yanlışsa admin rollback'ler. Aynı anda başkası soruyu çözüyorsa?
+    
+    Çözüm:
+      1. Rollback yapılırken: Etkilenen sorunun son X saatte çözülen tüm test_items'ı flagle (rollback_applied=true)
+      2. Editör panelinde: "Rollback Sonrası Etkilenen Testler" raporu
+      3. Kullanıcıya notification: "Çözdüğünüz X sorusu güncellenmiştir. Detaylar için bakın."
+      4. Puan yeniden hesaplaması: Admin seçeneği ("Puanları Yeniden Hesapla" butonu)
+      5. Audit Log'a yazılır: Rollback işlemi ve etkilenen testler
+  
+  Sürüm Diff Görünümü:
+    - Soru metni, seçenekler, doğru cevap, açıklama alanlarında önceki/yeni fark panelde gösterilir
+    - Admin diff'i görerek karar verir
+  
+  Sürüm Çakışma:
+    - Rollback anında başka biri tarafından güncellenmişse: 409 version_conflict döner
+    - Admin güncel sürümü inceleyip tekrar rollback dener
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+2) Veritabanı Tasarımı
+
+Temel tablolar:
+
+  users (kullanıcı hesapları ve profil)
+  subjects (dersler)
+  questions (soru metni, şıklar, doğru cevap, açıklama, zorluk, durum)
+  question_import_batches (import kayıtları)
+  question_import_errors (import satır hataları)
+  question_import_rows (import işlemeleri - idempotency)
+  user_submitted_questions (kullanıcıdan gelen soru havuzu)
+  tests (kullanıcı testi, ders, süre, başlangıç/bitiş, skor)
+  test_items (teste çıkan 20 soru, cevaplar, doğru/yanlış)
+  user_subject_stats (ders bazlı doğru/yanlış/çözülen - CACHED VIEW)
+  user_wrong_question_stats (kullanıcı yanlış soru istatistikleri)
+  user_recent_question_history (son 72 saatte çözülen sorular)
+  leaderboard_global_snapshots (genel sıralama cache - 5 dk başına)
+  leaderboard_subject_snapshots (ders bazında sıralama cache - 5 dk başına)
+  question_versions (soru sürüm geçmişi ve rollback için)
+  question_reports (kullanıcı itiraz kayıtları - P1)
+  question_difficulty_ratings (kullanıcı zorluk oyları - P1)
+  audit_logs (tüm kritik operasyonların kaydı) [✓ YENİ]
+  settings (sistem ayarları - tip güvenli)
+  failed_login_attempts (login security tracking)
+
+Soru durumları: pending, approved, rejected, archived, admin_review [✓ İLAVE: admin_review]
+
+Test Feedback Modes (Settings'de saklanacak):
+  - INSTANT_FEEDBACK_LOCKED
+  - DELAYED_FEEDBACK
+  - NO_FEEDBACK
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+2.1) Detaylı Tablo Taslağı (v1 - İyileştirilmiş)
+
+roles:
+  id, name (admin|editor|user), created_at
+
+users:
+  id, role_id (FK), name, email, password, email_verified_at, total_score, 
+  created_at, updated_at
+
+subjects:
+  id, name, slug, is_active, created_at, updated_at
+
+questions:
+  id, subject_id (FK), created_by (FK users), approved_by (FK users),
+  source_type (admin|editor|user_submission|import),
+  question_text (max 4000), option_a, option_b, option_c, option_d, option_e,
+  correct_option (ENUM: A|B|C|D|E),
+  explanation_text (required),
+  difficulty_score (DECIMAL(3,1), 1.0-10.0, default 5.0),
+  correct_count (INT, default 0), wrong_count (INT, default 0),
+  status (ENUM: pending|approved|rejected|archived|admin_review),
+  created_at, approved_at, current_version (INT, default 1)
+
+INDEX: questions(subject_id, status), questions(created_by, status), questions(difficulty_score)
+
+question_import_batches:
+  id, uploaded_by (FK users), file_name, file_type (CSV|XLSX), total_rows,
+  success_rows, failed_rows, status (processing|completed|failed), 
+  created_at, completed_at
+
+question_import_errors:
+  id, batch_id (FK), row_number, error_message, raw_payload (JSON)
+
+question_import_rows [✓ YENİ]:
+  id, batch_id (FK), question_hash, action (inserted|skipped|merged|manual_review),
+  matched_question_id (nullable FK), created_at
+
+user_submitted_questions:
+  id, user_id (FK), subject_id (FK), payload_json (soru metni JSON),
+  status (pending|approved|rejected|admin_review),
+  reviewed_by (FK users, nullable), reviewed_at, review_note,
+  created_at, updated_at
+
+tests:
+  id, user_id (FK), subject_id (FK), question_count (default 20),
+  duration_minutes (default 30), started_at, ended_at, score (0-100),
+  correct_count, wrong_count, blank_count, status (active|finished|aborted),
+  feedback_mode (ENUM iki şekilde saklanabilir - settings'ten veya column),
+  created_at, updated_at
+
+INDEX: tests(user_id, status), tests(user_id, created_at)
+
+test_items:
+  id, test_id (FK), question_id (FK), user_answer (A|B|C|D|E|NULL),
+  is_correct (BOOLEAN), answered_at, awarded_points (0 or 5),
+  rollback_applied (BOOLEAN, default false) [✓ YENİ]
+
+INDEX: test_items(test_id), test_items(question_id)
+
+user_subject_stats:
+  id, user_id (FK), subject_id (FK), solved_count, correct_count, wrong_count,
+  blank_count, total_score, last_test_at, updated_at
+
+NOT: Bu tablo CACHED VIEW olarak tasarlanır. Her test bitişinde transaction içinde güncellenir.
+Recovery: Gece batch job ile user_subject_stats yeniden hesaplanabilir (recalculate_user_stats job).
+
+UNIQUE INDEX: (user_id, subject_id)
+
+user_wrong_question_stats:
+  id, user_id (FK), question_id (FK), wrong_count, last_wrong_at, updated_at
+
+UNIQUE KEY: (user_id, question_id)
+
+INDEXES: 
+  - user_wrong_question_stats(user_id, wrong_count DESC)
+  - user_wrong_question_stats(user_id, last_wrong_at DESC)
+
+user_recent_question_history [✓ YENİ]:
+  id, user_id (FK), question_id (FK), last_answered_at, created_at
+
+NOT: Takıldıklarım modunun 72 saatlik cooldown'unu kontrol eder.
+
+leaderboard_global_snapshots [✓ YENİ - Separated]:
+  id, user_id (FK), score, rank, snapshot_at
+
+INDEXES: user_id, snapshot_at DESC
+
+leaderboard_subject_snapshots [✓ YENİ - Separated]:
+  id, user_id (FK), subject_id (FK), score, rank, snapshot_at
+
+INDEXES: subject_id, user_id, snapshot_at DESC
+
+question_versions:
+  id, question_id (FK), version_no (INT), changed_by (FK users),
+  change_reason (TEXT), payload_json (full question data), created_at
+
+NOT: Retention Policy: Son 12 ay. Eski versiyon aylık olarak archive'e taşınabilir.
+
+question_reports [✓ YENİ - P1]:
+  id, user_id (FK), question_id (FK),
+  category (ENUM: wrong_answer|unclear_statement|typo|other),
+  note (TEXT), status (ENUM: open|reviewing|resolved|rejected),
+  reviewed_by (FK users, nullable), reviewed_at, created_at
+
+question_difficulty_ratings [✓ YENİ - P1]:
+  id, user_id (FK), question_id (FK), rating (INT 1-10),
+  created_at, updated_at
+
+UNIQUE KEY: (user_id, question_id)
+
+audit_logs [✓ YENİ]:
+  id, actor_id (FK users), action (ENUM),
+  entity_type (ENUM: question|user|settings|submission),
+  entity_id (INT), old_value (JSON), new_value (JSON),
+  reason (TEXT, nullable), ip_address, user_agent,
+  created_at
+
+INDEXES: 
+  - audit_logs(actor_id, created_at DESC)
+  - audit_logs(entity_type, entity_id, created_at DESC)
+
+RETENTION: 90 gün, otomatik delete
+
+settings [✓ NETLEŞTIRILDI]:
+  id, key (UNIQUE VARCHAR), value_type (ENUM: string|integer|boolean|json),
+  value (TEXT), created_at, updated_at
+
+Örnek Ayarlar:
+  - test_feedback_mode (value_type: string, options: INSTANT_FEEDBACK_LOCKED|DELAYED_FEEDBACK|NO_FEEDBACK)
+  - registration_open (value_type: boolean)
+  - daily_test_limit (value_type: integer, default: 20)
+  - login_rate_limit (value_type: integer, default: 5)
+  - login_lockout_duration (value_type: integer, seconds, default: 900)
+  - minimum_leaderboard_tests (value_type: integer, default: 3)
+  - maintenance_mode (value_type: boolean, default: false)
+  - backup_mode (value_type: string, options: manual|automatic)
+  - backup_interval (value_type: integer, hours, default: 24)
+
+failed_login_attempts:
+  id, email, ip_address, attempt_count, locked_until, created_at, updated_at
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+3) Rol ve Yetki Kuralları (Kesin)
+
+Admin:
+  - Tüm sistem yönetimi, kullanıcı/rol yönetimi
+  - Tüm soru bankası yetkileri (CRUD)
+  - Import yönetimi, hata raporu
+  - Leaderboard görüntüleme ve reset
+  - Ayar yönetimi (kritik ayarlar şifre doğrulaması ile)
+  - Bakım modu yönetimi
+  - Audit log görüntüleme
+  - Yedekleme yönetimi
+  - Soru versiyonlama ve rollback
+  - Spot-check kuyruk yönetimi (onay/red)
+  - Kullanıcı sorusu +10 puan geri alma (reddedilmiş soruya)
+
+Editor:
+  - Soru ekleme, düzenleme, silme (kendi eklediği soruları)
+  - Soru durumu değiştirme (pending → approved/rejected/admin_review)
+  - Kullanıcı sorularını inceleme/onaylama/reddetme
+  - Red gerekçesi yazma (zorunlu)
+  - Kalite kuyruğu inceleme
+  - Import manual_review kuyruğu
+  - Soru itiraz (question_reports) inceleme (P1)
+  - Leaderboard görüntüleme (salt okunur)
+
+Kullanıcı:
+  - Ders seçip test çözme
+  - Soru gönderme (günlük 20 limit)
+  - Kendi istatistiklerini görme
+  - Leaderboard görüntüleme
+  - Soru itiraz gönderme (P1)
+  - Soru zorluk puanı verme (P1)
+  - Kendi profil gizliliği ayarlanması (v1.1+)
+
+Politika yapısı: Laravel Policy/Gate ile endpoint seviyesinde yetki kontrolü
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+4) Soru Yönetimi ve Import (İyileştirilmiş)
+
+Admin/Editor için panel:
+
+  Manuel soru ekleme/düzenleme/silme
+  Toplu import: CSV/Excel şablonu ile soru yükleme
+  Soru versiyonlama (geçmiş)
+  Soru rollback (admin only)
+  Soru kalite kuyruğu inceleme
+
+Import akışı (Kesin):
+
+  1. Dosya Yükleme
+     - Dosya türü: CSV/XLSX
+     - Max dosya: 20 MB
+     - Max satır: 1000
+
+  2. Doğrulama
+     - CSV/XLSX parse
+     - Her satıra validation (soru metni, şıklar, doğru cevap, açıklama)
+     - Hatalı satırlar listelenir
+
+  3. Önizleme
+     - Yüklenmeden önce: "X satırdan Y tanesi başarılı olacak" gösterilir
+     - Hatalı satırlar inline gösterilir
+     - Admin/Editor onay verene kadar kaydedilmez
+
+  4. İdempotency Kontrolü
+     - question_hash hesabı yapılır
+     - Çakışan sorular: SKIP | MERGE | MANUAL_REVIEW seçeneği
+     - Kullanıcı seçim yapabilir
+
+  5. Kaydedilme
+     - question_import_batches kaydedilir
+     - question_import_rows kaydedilir (each action = inserted|skipped|merged|manual_review)
+     - Başarılı sorular questions tablosuna eklenir
+     - Hata raporları question_import_errors'a kaydedilir
+
+  6. Hata Raporu
+     - İndirilebilir CSV/TXT rapor
+     - Hangi satırda hata olduğu
+     - Hata mesajı
+     - Örnek: "Satır 45: Açıklama boş (gerekli), Doğru cevap seçeneği yok"
+
+İdempotency Stratejisi (Kesin):
+
+  Hash Formülü: MD5(TRIM(CONCAT(subject_id, LOWER(soru_metni))))
+  
+  Çakışan Sorular:
+    - SKIP: Mevcut soruyu atla, işlemmeyin (skip_count++)
+    - MERGE: Yeni bilgileri mevcut soruya ekle
+      * Açıklama güncelleniyor (eğer boş değilse)
+      * Şıklar güncelleniyor (eğer değişmişse)
+      * question_versions'a log kaydedilir
+    - MANUAL_REVIEW: Editöre gönderin
+      * question_import_rows action='manual_review' kaydedilir
+      * Editör panelinde "Import - Manuel İnceleme" kuyruğu
+      * Editör karar verir: "Aynı soruya merge et / Yeni soru ekle / İçe aktarma"
+
+Kullanıcıdan gelen sorular:
+
+  Akış:
+    1. Kullanıcı soruyu gönderir → user_submitted_questions.status = pending
+    2. Editor/Admin panelinde "Bekleyen Sorular" kuyruğu
+    3. Editör onaylarsa:
+       - Otomatik kalite eşik kontrolü yapılır
+       - Başarılı ise: questions.status = approved + kullanıcıya +10 puan
+       - Başarısız ise: status = admin_review (admin spot-check kuyruğu)
+    4. Admin inceleyip onaylarsa: questions.status = approved + +10 puan
+    5. Admin reddettiğinde: user_submitted_questions.status = rejected + gerekçe
+    6. Kullanıcı kendi sorusunun durumunu görebilir
+
+Kalite Eşik Kontrolü:
+  - Soru metni 20-4000 karakter
+  - Açıklama boş olamaz
+  - Tüm 5 şık doldurulmuş
+  - Açıklama min 20 karakter
+  - Soru metni tekrar olmaması (ilk import'ta bazen geçer)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+5) Test Motoru (20 Soru, 30 Dakika - Kesin)
+
+Kullanıcı bir ders seçer → Test başlat modalında 3 mod seçer:
+  
+  1. Rastgele
+  2. Zorluk Derecesine Göre (range slider 1-10)
+  3. Takıldıklarım (Yanlış Yapılanlardan)
+
+Sistem otomatik 20 soru üretir ve testi başlatır.
+
+Test süresi: 30 dakika (sunucu tarafı süre kontrolü + istemci sayaç)
+
+Soru cevaplama davranışı (Seçilen Feedback Mode'a bağlı):
+
+INSTANT_FEEDBACK_LOCKED modda:
+  - Şık tıklanınca anında:
+    * Şık kutusu yeşil/kırmızı arka plan (✓ veya ✗ ikon)
+    * Doğru ise: Yeşil + sorunun altında cevap açıklaması gösterilir
+    * Yanlış ise: Kırmızı + sorunun altında doğru cevap + açıklama gösterilir
+    * Cevap KİLİTLENİR (değiştirilemez)
+
+DELAYED_FEEDBACK modda:
+  - Şık tıklanınca: Seçim kaydedilir, görsel feedback YOK
+  - Cevap seçimi değiştirilebilir (test bitene kadar)
+  - Test bitiminde tüm sorular detaylı gösterilir
+
+Süre biterse test otomatik sonlandırılır ve puan hesaplanır.
+
+Test Navigasyonu:
+  - İleri/Geri butonları
+  - Sayaç sağ üstte sabit (sticky)
+  - Mobilde altta sabit butonlar
+  - Yazı boyutu seçeneği (Küçük/Orta/Büyük) - localStorage'a kaydedilir
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+6) Puanlama, Raporlama ve İstatistik (Kesin)
+
+Puanlama kuralı:
+  Doğru: +5 puan
+  Yanlış: 0 puan
+  Boş: 0 puan
+  Maksimum test puanı: 20 × 5 = 100
+
+Test bitiminde:
+  - Toplam puan (X/100)
+  - Doğru/Yanlış/Boş detaylı sayılar ve yüzdeler
+  - Tüm 20 sorunun detaylı gösterimi
+
+Kullanıcı panelinde:
+  - KPI Kartları: Toplam Puan | Doğru Sayısı | Yanlış Sayısı | Çözülen Soru
+  - Ders bazında doğru/yanlış sayıları
+  - En çok yanlış 50 soru listesi (ders filtresi + arama)
+  - Genel leaderboard
+  - Ders bazlı leaderboard
+
+Leaderboard:
+  - Genel puan sıralaması
+  - Ders bazlı sıralama
+  - Sekmeli yapı
+  - Minimum eşik: Son 30 günde min 3 geçerli test
+  - Tie-breaker: Yanlış sayısı az → Bitirme zamanı erken → Son test zamanı yakın
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+7) Dinamik Zorluk Skoru (Kesin)
+
+Ölçek: 1.0 - 10.0 arası
+
+Başlangıç değeri: Her yeni soru için 5.0
+
+İzlenen metrikler:
+  - correct_count: Doğru cevap sayısı
+  - wrong_count: Yanlış cevap sayısı
+  - attempt_count = correct_count + wrong_count
+  - wrong_rate = wrong_count / attempt_count
+
+Güncelleme yaklaşımı:
+  - Her test bitiminde soruların doğru/yanlış sayıları güncellenir
+  - Yeterli veri oluşmadan aşırı oynaklığı önlemek için Bayesian smoothing uygulanır
+
+Hesaplama (Kesin Formül):
+
+  smoothed_wrong_rate = (wrong_count + 3) / (attempt_count + 6)
+  difficulty_score = CLAMP(1.0, 10.0, ROUND(1 + 9 * smoothed_wrong_rate, 1))
+
+Beklenen davranış:
+  - Soru çoğunlukla doğru yapılıyorsa: wrong_rate ↓ → difficulty ≈ 1
+  - Soru çoğunlukla yanlış yapılıyorsa: wrong_rate ↑ → difficulty ≈ 10
+  - Orta seviye: difficulty ≈ 5
+
+Operasyon:
+  - Admin panelinde soru detayında anlık zorluk puanı görünür
+  - Etiket: easy (1.0-3.9) | medium (4.0-6.9) | hard (7.0-10.0)
+
+Hibrit Zorluk Skoru (P1) [✓ YENİ]:
+
+  Final Hesaplama:
+    - %70: Performance-based (wrong_rate modeli)
+    - %30: User rating ortalaması (1-10 puan)
+  
+  final_difficulty = ROUND((0.7 * performance_difficulty) + (0.3 * user_rating_avg), 1)
+  
+  Koşul: Minimum 10 kullanıcı oylaması gerekli. Aksi takdirde %100 performance-based.
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+8) Soru İtiraz Akışı ve Kalite Takibi (P1)
+
+Soru İtiraz Akışı [✓ YENİ]:
+
+  1. Kullanıcı sorunun alt köşesindeki "İtiraz" ikonundan ilgili formu açar
+  2. İtiraz Kategorisi: Yanlış Cevap | İfade Belirsizliği | Yazım Hatası | Diğer
+  3. Kısa açıklama yazılır (zorunlu, min 10 karakter)
+  4. Gönderildikten sonra: question_reports tablosuna status=open ile kaydedilir
+  5. Editör panelinde "Soru İtirazları" kuyruğu
+  6. Editör itirazı inceleyip (open → reviewing)
+  7. Karar verir: (resolved → soru düzelt/açıkla) veya (rejected → itirazı reddej)
+  8. Çözüm notunuz girilir ve audit_logs'a yazılır
+
+Gerekirse soru sürüm güncellemesi veya arşivleme tetiklenir.
+
+İçerik Kalite Takibi (Kesin Kural):
+
+  Her soru için yanlış yapılma oranı otomatik takip edilir.
+  
+  Metrik: wrong_rate = wrong_count / (correct_count + wrong_count)
+
+Editör Kalite Kuyruğu (Admin Dashboard'da Kartlar):
+
+  Kontrol Eşikleri:
+    - attempt_count >= 30 olmadan kalite kuyruğuna düşmez
+    - Çok kolay soru: wrong_rate < 0.20 → "Gözden Geçir" kartı
+    - Çok problemli soru: wrong_rate > 0.75 → "Kontrol Et / Düzelt" kartı
+    - Normal soru: wrong_rate 0.20-0.75 arası → Kuyruğa düşmez
+
+  Admin Panelinde Gösterim:
+    - "Kalite Kuyruğu - Çok Kolay Sorular" kartı (count gösterilir)
+    - "Kalite Kuyruğu - Çok Zor Sorular" kartı (count gösterilir)
+    - Tıklandığında liste açılır, editör sorularını inceleyebilir
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+9) Güvenlik ve Validasyon (İyileştirilmiş)
+
+Zorunlu Validasyonlar:
+  - Form validasyon (frontend + backend)
+  - Import validasyon (dosya, satır, veri türü)
+  - Test gönderimleri validasyon (soru var mı, cevap geçerli mi)
+
+Rate Limiting (Kesin):
+  
+  Login Rate Limit:
+    - 15 dakika içinde 5 başarısız deneme → Hesap kilitlenir
+    - Kilitlenme süresi: 15 dakika (otomatik açılır)
+    - Mekanizma: failed_login_attempts tablosunda tutulur
+  
+  Soru Gönderimi Rate Limit:
+    - Günde maksimum 20 soru
+    - Dakikada maksimum 1 soru
+  
+  Test Başlatma Rate Limit:
+    - Dakikada maksimum 5 test
+    - Günde maksimum 20 test
+
+SQL Injection / XSS / CSRF Korumaları:
+
+  SQL Injection: Laravel Query Builder + Prepared Statements (varsayılan)
+  
+  XSS: Blade auto-escaping ({{ }}) + sanitization
+    - Import soru metni sanitization (alphanumeric + whitelist special chars)
+    - Allowed chars: a-z, A-Z, 0-9, ?!:;-,.()[]"'
+    - HTML tag'i GEÇİRİLMEZ
+  
+  CSRF: [✓ KESIN STRATEJİ]
+    - Strategy seçim: Token-based (recommended)
+    - Endpoint: GET /csrf-token
+    - Client localStorage'a kaydeder
+    - POST request'lerde X-CSRF-Token header'ı gönderilir
+    - Laravel middleware csrf verification
+    - Alternative (v1.1): SameSite=Strict cookie policy
+
+Audit Log (Kesin):
+
+  Kapsamı:
+    - Soru onay/red işlemleri
+    - Soru düzenleme geçmişi (versiyonlandı)
+    - Soru rollback işlemleri
+    - Kritik ayar değişiklikleri (feedback mode, bakım modu, vb)
+    - Admin şifre doğrulama işlemleri
+    - Soru versiyonlama
+  
+  Log Alanları:
+    - actor_id: İşlem yapan kullanıcı
+    - action: Hangi işlem (approve|reject|edit|delete|rollback|settings_change)
+    - entity_type: question|user|settings|submission
+    - entity_id: İlgili kaynağın ID
+    - old_value: Eski değer (JSON)
+    - new_value: Yeni değer (JSON)
+    - reason: İşlem nedeni (red gerekçesi gibi)
+    - created_at: İşlem zamanı
+    - ip_address: Gelen IP
+    - user_agent: Tarayıcı bilgisi
+  
+  Saklama: 90 gün, otomatik delete policy
+
+Yedekleme Güvencesi:
+
+  Backup'lar:
+    - Veritabanı dump
+    - Dosya sistemi dump (uploads, etc)
+    - Uzak storage'a backup (v1.1+)
+  
+  Backup Testi:
+    - Staging ortamında periyodik geri yükleme testi yapılır
+    - Backup'ın geçerli olduğu doğrulanır
+    - Geri dönüş prosedürü dokümante edilir
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+10) API / Route Seviyesi Net Gereksinimler (Kesin)
+
+Kullanıcı:
+
+  GET /subjects
+    - Tüm aktif dersler listesi
+
+  GET /me
+    - Giriş yapan kullanıcının profil bilgileri
+
+  POST /tests/start
+    - Required: subject_id, mode (random|difficulty|wrong_questions)
+    - Optional: difficulty_min, difficulty_max (only difficulty mode)
+    - Response 200: { test_id, questions: [{ id, text, options }], started_at, duration_minutes }
+    - Error 409: active_test_exists
+    - Error 422: insufficient_questions
+    - Error 422: mode_pool_insufficient
+    - Error 403: email_not_verified
+
+  GET /tests/{id}
+    - Aktif test'in mevcut durumu
+
+  POST /tests/{id}/answer
+    - Required: question_id, answer (A|B|C|D|E)
+    - Response 200: { is_correct, feedback (if INSTANT_FEEDBACK_LOCKED) }
+
+  POST /tests/{id}/finish
+    - Test'i sonlandırır
+    - Response 200: { score, correct_count, wrong_count, blank_count }
+
+  GET /tests/{id}/review
+    - Test sonrası detaylı soru inceleme
+    - Response 200: { test_data, questions: [{ id, question, user_answer, correct_answer, explanation, is_correct }] }
+
+  GET /me/stats
+    - Kullanıcının genel istatistikleri
+
+  GET /me/wrong-questions/top-50
+    - En çok yanlış 50 soru listesi (pagination + filter)
+
+  GET /leaderboard/global
+    - Genel leaderboard (snapshot)
+
+  GET /leaderboard/subject/{subject_id}
+    - Ders bazlı leaderboard
+
+  GET /leaderboard/me
+    - Kullanıcının anlık sırası ve puanı
+
+  POST /question-submissions
+    - Soru gönderme
+    - Required: subject_id, question_text, options, correct_option, explanation
+    - Response 201: { submission_id, status }
+
+  GET /settings/public
+    - Kullanıcıyı etkileyen açık ayarlar (registration_open, etc)
+
+  POST /questions/{id}/report [P1]
+    - Soru itirazı
+    - Required: category, note
+    - Response 201: { report_id }
+
+  POST /questions/{id}/rate-difficulty [P1]
+    - Soru zorluk puanı
+    - Required: rating (1-10)
+    - Response 201: { rating_id }
+
+Editör/Admin:
+
+  POST /admin/questions/import
+    - CSV/XLSX import
+    - Response 200: { batch_id, preview: [...] }
+
+  POST /admin/questions/import/{batch_id}/confirm
+    - Import onayı
+    - Required: actions (skip|merge|manual_review mapping)
+    - Response 200: { success_count, failed_count }
+
+  GET /admin/submissions/pending
+    - Bekleyen kullanıcı soruları
+
+  POST /admin/submissions/{id}/approve
+    - Soru onaylama
+    - Response 200: { question_id, user_reward: +10 }
+
+  POST /admin/submissions/{id}/reject
+    - Soru reddetme
+    - Required: reason (zorunlu)
+    - Response 200: { reason_logged }
+    - Error 400: validation_failed (reason is required)
+
+  PUT /admin/settings/test-feedback
+    - Geri bildirim modu değişikliği
+    - Required: password (kritik ayar), mode
+    - Response 200: { new_mode }
+
+  PUT /admin/settings/daily-test-limit
+    - Günlük test limiti
+    - Required: password, limit
+    - Response 200: { new_limit }
+
+  PUT /admin/settings/registration-mode
+    - Kayıt açık/kapalı
+    - Required: password, open (boolean)
+    - Response 200: { registration_open }
+
+  PUT /admin/settings/maintenance-mode
+    - Bakım modu
+    - Required: password, enabled (boolean)
+    - Response 200: { maintenance_mode }
+
+  GET /admin/question-reports
+    - Soru itirazları (P1)
+
+  POST /admin/question-reports/{id}/resolve
+    - İtiraz çözümü
+    - Required: resolution_note
+    - Response 200
+
+  POST /admin/question-reports/{id}/reject
+    - İtiraz reddetme
+    - Response 200
+
+  GET /admin/questions/{id}/versions
+    - Soru sürüm geçmişi
+
+  POST /admin/questions/{id}/rollback
+    - Soru rollback
+    - Required: version_no
+    - Response 200 veya 409: version_conflict
+    - Side effect: Etkilenen testler flaglenir, audit log yazılır
+
+  GET /admin/dashboard
+    - Dashboard verisi (KPI'lar, grafikler)
+    - Query filters: period (today|week|month|all)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+11) Veri Saklama Politikası (Kesin)
+
+Audit log saklama: 90 gün (otomatik delete)
+
+Test geçmişi (tests, test_items) saklama: 24 ay (raporlama bütünlüğü için)
+
+Kullanıcı performans özetleri (user_subject_stats): Süresiz (aylık recalculation destekli)
+
+Import hata/log kayıtları: 180 gün
+
+Soru versiyonları: Son 12 ay (eski versiyon archive'e taşınabilir)
+
+Failed login attempts: 30 gün
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+12) Yönetim Paneli Ekranları (İyileştirilmiş)
+
+Auth Ekranları:
+  - Kayıt
+  - Giriş
+  - Şifre Sıfırla
+  - Email Doğrulama
+
+Kullanıcı Ekranları:
+  - Ders Listesi
+  - Test Başlat (Mode seçim)
+  - Test Çözüm Ekranı (20 soru / 30 dk, sticky sayaç, İtiraz/Puanla ikonları)
+  - Test Sonucu (Puan + Detay)
+  - Profil İstatistik Ekranı
+  - En Çok Yanlış 50 Soru Ekranı (tablo, ders filtresi, arama)
+  - Genel Leaderboard (sekmeli)
+  - Ders Bazlı Leaderboard (dropdown + sekmeler)
+  - Soru Önerme Formu (Modal)
+  - Gönderdiğim Sorular Status Takibi [✓ YENİ]
+
+Editor/Admin Ekranları:
+  - Dashboard (KPI kartları + time filter)
+  - Ders Yönetimi (CRUD)
+  - Soru Bankası Yönetimi (CRUD + version history)
+  - Bekleyen Kullanıcı Soruları (onay/red + gerekçe)
+  - Kalite Kuyruğu (Çok kolay / Çok zor)
+  - Import (CSV/XLSX) + hata raporları + manual review kuyruğu
+  - Soru İtirazları (question_reports) - P1
+  - Uygulama Ayarları (test feedback modu, bakım modu, vb)
+  - Audit Log Görüntüleme (filtrable)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+12.1) UI/UX Kararları (Kesin)
+
+Test Çözüm Ekranı:
+
+  Layout:
+    - Her sayfada 1 soru gösterimi
+    - İleri/Geri butonları
+    - Sayaç sağ üstte sabit (sticky) - "Kalan: MM:SS"
+    - Mobilde altta sabit butonlar
+
+  Görünüm:
+    - Doğru/yanlış cevapta şık kutusu tamamen yeşil/kırmızı arka plan
+    - Renkle birlikte ikon desteği (✓/✗) zorunlu (erişilebilirlik)
+    - Yazı boyutu seçeneği (Küçük/Orta/Büyük) - sağ üste sabit düğme
+    - localStorage'a seçim kaydedilir
+
+  Aksiyonlar:
+    - Her sorunun alt köşesinde opsiyonel İtiraz (⚑) ve Puanla (★) ikonları
+    - İtiraz: Modal açılır, kategori + açıklama
+    - Puanla: 1-10 slider seçimi
+    - Modal kapatma sonrası test ekranına dön, o soru vurgulu kalsın
+
+Test Başlat Ekranı:
+
+  Mod Seçim:
+    - 3 buton: Rastgele | Zorluk | Takıldıklarım
+    - Varsayılan: Rastgele seçili
+
+  Zorluk Modu:
+    - Range slider (1-10)
+    - Min/max değerleri input box'ta da gösterilebilir
+    - Default: 1-10 (full range)
+
+  Takıldıklarım Modu:
+    - Hiçbir seçim alanı yok
+    - Direktmen "Test Başlat" butonu
+    - Fallback nedeniyle rastgele sorular eklendiyse bilgi mesajı
+
+Leaderboard:
+
+  Sekmeli yapı:
+    - "Genel" sekmesi
+    - "Ders Seçin" dropdown (arama + pin özelliği)
+    - Mobile: Horizontal scroll yerine dropdown
+
+  Tablo:
+    - Rank | Ad | Puan | Son Test Tarihi
+    - Pagination (top 100 gösterimi)
+
+  Filtreleme:
+    - Zaman filtresi (Bu Hafta / Bu Ay / Tüm Zamanlar)
+
+Admin Dashboard:
+
+  KPI Kartları:
+    - Toplam Kullanıcı
+    - Toplam Soru
+    - Bekleyen Onay Sayısı
+    - Günlük Test Sayısı
+    - Bakım Modunda Aktif Test Sayısı
+    - Zaman filtresi: Today | This Week | This Month | All Time (default: This Week)
+    - Trend göstericisi (↑ %20)
+
+Ayar Yönetimi:
+
+  Kritik Ayarlar:
+    - Şifre doğrulama gerekli
+    - Değişiklikten sonra success mesajı
+    - Audit log kaydı
+
+  Açık Ayarlar:
+    - Direkt değişiklik yapılabilir
+
+Soru İtiraz Yönetimi (P1):
+
+  Kuyruğu:
+    - Category | Soru | Başlatan Kullanıcı | Durum | Oluşturulma Tarihi
+    - Filtreleme: Durum (open/reviewing/resolved/rejected)
+
+  Detail:
+    - Soru metni + şıklar
+    - İtiraz kategorisi + açıklama
+    - Çözüm notu yazılması (required)
+    - "Çöz" veya "Reddet" butonu
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+13) Tasarım Sistemi İlkeleri (v1)
+
+Masaüstü öncelikli ama mobil uyumlu responsive yapı
+
+Kontrast ve okunabilirlik odaklı renk paleti
+  - Doğru: #28a745 (yeşil)
+  - Yanlış: #dc3545 (kırmızı)
+  - Uyarı: #ffc107 (sarı)
+  - Bilgi: #0069d9 (mavi)
+
+Buton/metin/input bileşenlerinde tek tip tasarım dili
+
+Başarı/hata/durum mesajlarında standart bildirim (toast/alert) kalıbı
+
+Kritik aksiyonlarda (test bitirme, onay/red) doğrulama adımı
+  - Örn: Test Bitirme → Özet göster → "Emin misiniz?" → Onayla/Geri
+
+İkonlar:
+  - Yeşil ✓ (doğru)
+  - Kırmızı ✗ (yanlış)
+  - Gri - (boş)
+  - Flag ⚑ (itiraz)
+  - Star ★ (puanla)
+  - Bell 🔔 (bildirim)
+  - Settings ⚙ (ayarlar)
+
+Typography:
+  - Başlık: 24px
+  - Subheading: 18px
+  - Body: 14-16px
+  - Caption: 12px
+  - Kullanıcı yazı boyutu: 12px (Küçük) | 14px (Orta) | 16px (Büyük)
+
+Spacing:
+  - Compact: 8px
+  - Normal: 16px
+  - Spacious: 24px
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+14) Moderasyon ve Kalite Kuralları (Kesin)
+
+Kullanıcı Sorusu Onay Akışı (Detaylı):
+
+  1. Kullanıcı soruyu gönderir
+     → user_submitted_questions.status = pending
+
+  2. Editör Panelinde İnceleme
+     → "Bekleyen Sorular" kuyruğu
+     → Soru detayı gösterilir
+
+  3. Editör Onaylarsa
+     → Otomatik kalite eşik kontrolü
+     → IF kalite başarılı THEN
+         * questions.status = approved
+         * questions.approved_by = editor_id
+         * users.total_score += 10
+         * user_submitted_questions.status = approved
+         * Notification gönder: "Sorunuz onaylandı! +10 puan aldınız"
+       ELSE (kalite başarısız)
+         * user_submitted_questions.status = admin_review
+         * Admin spot-check kuyruğuna düşer
+
+  4. Editör Reddettiğinde
+     → MANDATORY: Red gerekçesi zorunlu
+     → user_submitted_questions.status = rejected
+     → user_submitted_questions.review_note = reason
+     → Notification gönder: "Sorunuz Reddedildi: [reason]"
+     → Kullanıcı puan almaz
+
+  5. Admin Spot-Check (kalite başarısız soruların kurtuluşu)
+     → Admin inceledikten sonra:
+       * APPROVE: questions.status = approved + +10 puan
+       * REJECT: user_submitted_questions.status = rejected + reason
+       * ASK EDITOR: Editöre geri gönderin
+
+Reddedilmiş Kullanıcı Sorusuna Ait Puan Geri Alma:
+
+  Senaryo: Admin onayladığı ve +10 puan verdiği kullanıcı sorusu daha sonra yanlış tespit edilir.
+
+  Davranış:
+    - Soru rejected olur
+    - Verilen +10 puan kullanıcıdan geri alınır
+    - users.total_score -= 10
+    - Audit log kaydı: actor_id, action=reject_with_reward_reversal, entity_id, reason
+    - Notification: "Sorunuz reddedilmiştir. Verilen +10 puan geri alınmıştır."
+    - Geri alma işlemi: Admin 24 saat içinde "Geri Aç" butonu ile cancel edebilir (undo)
+
+Soru Silme Politikası:
+
+  Admin: Soru SILEBILIR (hard delete)
+  Editör: SILENEMEZ, sadece archived durumuna alabilir
+  Kullanıcı: İçerik sahibi de silemez
+
+Soru Düzenleme Politikası:
+
+  Admin: Tüm soruları düzenleyebilir
+  Editör: Kendisinin eklediği soruları düzenleyebilir, diğerlerini SILENEMEZ (view-only)
+  Kullanıcı: Kendisinin gönderdiği soruyu draft halinde değiştirebilir (pending status)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+15) Performans ve Ölçek Stratejisi (İyileştirilmiş)
+
+Leaderboard Hesaplama ve Cache:
+
+  Snapshot Modeli:
+    - Her 5 dakikada bir async job çalışır
+    - leaderboard_global_snapshots ve leaderboard_subject_snapshots'a yazan
+    - Ağır aggregation işlemi queue'da yapılır
+  
+  Adaptive Periyot:
+    - Normal: 5 dakika
+    - System Load CPU %70+: 10 dakika (otomatik adjustment)
+    - Job failed: Exponential backoff (5 min → 10 min → 20 min)
+  
+  Race Condition Prevension:
+    - locked_at column eklenir
+    - Job başladığında locked_at = now()
+    - Concurrent job'lar locked_at check ederek skip eder
+  
+  Leaderboard Display:
+    - Global snapshot'ı 5 dakikalık cache ile sunulur
+    - leaderboard/me endpoint'inde kullanıcının güncel puanı anlık hesaplanır
+    - İlk login'de leaderboard açılırsa cache'ten sunulur (fresh >= 5 min)
+
+Eşit Puan Kırılımı:
+
+  ORDER BY:
+    1. score DESC (puan yüksek)
+    2. wrong_count ASC (yanlış sayısı az)
+    3. last_finished_at ASC (son test zamanı erken)
+    4. created_at ASC (hesap yaratılış zamanı - eski üyeler üste)
+
+Soru Arama:
+
+  v1: MySQL LIKE + indeks
+  Optimizasyon:
+    - questions(subject_id, status) indeksi
+    - FULLTEXT search eklenebilir (v1.1+)
+
+İstatistik Güncelleme:
+
+  Senkron: Test bitiminde transaction içinde user_subject_stats güncellenir
+  Recovery: Gece batch job ile user_subject_stats yeniden hesaplanabilir
+
+Ağır Admin Raporları:
+
+  Constraint: Tarih filtresi zorunlu
+  Pagination: 100 satır per page
+  Cache: Report sonuçları 1 saat cache'lenir
+
+Genel Cache TTL: 300 saniye (5 dakika)
+
+Ölçekleme Tetikleyicileri:
+
+  Monitor: CPU %70+ VE yavaş sorgu artışı birlikte
+  Action: Database query optimization + connection pool tuning
+  Staging test: 300 concurrent load test sonucu metrikler toplanır
+
+İlk Günden İndeksleme (ZORUNLU):
+
+  tests (user_id, status)
+  tests (user_id, created_at DESC)
+  test_items (test_id)
+  test_items (question_id)
+  questions (subject_id, status)
+  questions (difficulty_score DESC)
+  user_wrong_question_stats (user_id, wrong_count DESC)
+  user_wrong_question_stats (user_id, last_wrong_at DESC)
+  audit_logs (actor_id, created_at DESC)
+  audit_logs (entity_type, entity_id, created_at DESC)
+  user_subject_stats (user_id, subject_id) - UNIQUE
+  question_versions (question_id, version_no DESC)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+16) Test ve Yayına Alma (Kesin)
+
+Unit Testler:
+  - Puanlama kuralları (doğru=+5, yanlış=0, boş=0)
+  - Süre bitişi ve test sonlandırma
+  - Soru seçimi algoritmaları (rastgele, zorluk, takıldıklarım fallback)
+  - Leaderboard eligibility kuralları
+  - Import idempotency
+
+Feature Testler:
+  - Authentication (kayıt, giriş, email doğrulama)
+  - Rol yetkileri (admin, editor, user)
+  - Soru onay akışı
+  - Test başlatma ve çözüm
+  - Leaderboard görüntüleme
+
+Integration Testler:
+  - Test bitiminde istatistik güncelleme
+  - Leaderboard snapshot hesapı
+  - Import batch işlemleri
+  - Audit log kaydı
+
+Performance Testler:
+  - 300 concurrent test simülasyonu
+  - 50 snapshot/5 min load
+  - DB connection pool exhaustion
+  - Query response time (P95 < 500ms)
+
+Security Testler:
+  - XSS injection (soru metni)
+  - SQL injection (import, search)
+  - CSRF token validation
+  - Rate limit bypass attempts
+
+Yayın Checklist:
+
+  ✓ Migration'lar hazır ve test edilmiş
+  ✓ Database seed'ler (admin/editor/user test hesapları)
+  ✓ .env production ayarları
+  ✓ CORS ayarları
+  ✓ SSL sertifikası
+  ✓ Cron job'ları konfigüre (leaderboard snapshot, log cleanup)
+  ✓ Queue worker konfigürasyonu
+  ✓ Backup komutları test edilmiş
+  ✓ Monitoring ve alerting setup
+  ✓ Error tracking (Sentry gibi)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+17) Fazlara Bölünmüş Uygulama Takvimi (Kesin)
+
+Faz 1 (v1 Temel):
+  - Auth + roller + ders/soru temel CRUD
+  - Database schema
+  - Basic UI layout
+
+Faz 2:
+  - Test motoru (20 soru/30 dk)
+  - Anlık doğru/yanlış geri bildirimi (INSTANT_FEEDBACK_LOCKED)
+  - Delayed feedback (DELAYED_FEEDBACK)
+
+Faz 3:
+  - İstatistikler + en çok yanlış 50 soru
+  - Leaderboard (global + ders bazlı)
+
+Faz 4:
+  - Kullanıcı soru önerisi + editor/admin onay süreci
+  - Kalite kuyruğu
+
+Faz 5:
+  - Import (CSV/XLSX) + idempotency
+  - Raporlama
+  - Performans sertleştirmesi
+  - Güvenlik hardening
+
+P1 (v1.1):
+  - Soru itiraz akışı
+  - Soru zorluk puanlaması
+  - Hibrit difficulty modeli
+  - Gamification (streak, günlük hedef)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+18) Sprint Bazlı Detaylı Uygulama Planı (Kesin)
+
+Sprint 0 - Proje Temeli (1 hafta):
+
+  Kart S0-01 - Auth ve Rol Altyapısı
+    - Migration: roles, users.role_id FK
+    - Service: RoleAssignmentService
+    - Endpoint: Auth (kayıt, giriş, şifre sıfırla)
+    - Seed: admin/editor/user hesapları
+    - Acceptance: Roller oluşur, unauthorized access engellenir
+
+  Kart S0-02 - Güvenlik Sertleştirme
+    - Migration: users.email_verified_at, failed_login_attempts tablo
+    - Service: LoginSecurityService (rate limit + lockout)
+    - Endpoint: Login rate limit ve lockout kontrolü
+    - Email doğrulama zorunlu
+    - 5 deneme / 15 dk lockout
+
+  Kart S0-03 - Sistem Ayarları Çatısı
+    - Migration: settings (key, value_type, value)
+    - Service: SettingsService (cache ile)
+    - Endpoint: /admin/settings/*
+    - Kritik ayarlarda admin şifre doğrulama
+    - Audit log kaydı
+
+Sprint 1 - Çekirdek Domain (1.5 hafta):
+
+  Kart S1-01 - Ders ve Soru Veri Modeli
+    - Migration: subjects, questions (difficulty_score, status, versioning)
+    - Service: QuestionService (CRUD)
+    - Endpoint: Admin/Editör soru CRUD
+    - Soru ekleme validasyonu
+    - Status akışı (pending → approved/rejected/admin_review/archived)
+
+  Kart S1-02 - Test Başlatma ve Aktif Test Kuralı
+    - Migration: tests, test_items
+    - Service: TestGenerationService, ActiveTestGuardService
+    - Endpoint: POST /tests/start
+    - Tek aktif test rule (409 active_test_exists)
+    - Min 20 soru kontrolü (422 insufficient_questions)
+
+  Kart S1-03 - Test Modları (Rastgele/Zorluk/Takıldıklarım)
+    - Migration: user_wrong_question_stats, user_recent_question_history
+    - Service: QuestionPoolSelectorService (mode bazlı havuz)
+    - Fallback algoritması birebir implementasyon
+    - 72 saat cooldown + kademeli düşüş
+    - Bildirim mesajı gösterimi
+
+  Kart S1-04 - Test Süre ve Cevaplama Motoru
+    - Migration: tests.started_at, ended_at
+    - Service: ExamTimerService, AnswerEvaluationService
+    - Endpoint: POST /tests/{id}/answer, POST /tests/{id}/finish
+    - Sunucu zamanı tabanlı sayaç
+    - Otomatik test bitişi
+    - Reconnection süresi hesaplama
+
+Sprint 2 - Analitik, Leaderboard, Moderasyon (2 hafta):
+
+  Kart S2-01 - Leaderboard ve Adalet Kuralları
+    - Migration: leaderboard_global_snapshots, leaderboard_subject_snapshots
+    - Service: LeaderboardService, LeaderboardEligibilityService
+    - Endpoint: /leaderboard/global, /leaderboard/subject/{id}, /leaderboard/me
+    - Eligibility kontrolü (30 gün, 3 test)
+    - Tie-breaker kuralları
+    - Snapshot cache (5 dakika)
+
+  Kart S2-02 - Dinamik Zorluk ve Kalite Kuyruğu
+    - Service: DifficultyScoreService (Bayesian smoothing)
+    - Service: QuestionQualityQueueService
+    - Difficulty hesaplama formülü
+    - Kalite eşikleri (attempt_count, wrong_rate)
+    - Admin dashboard kalite kartları
+
+  Kart S2-03 - Kullanıcı Soru Önerisi ve Ödül Güvenliği
+    - Migration: user_submitted_questions, audit_logs
+    - Service: SubmissionModerationService, ContributionRewardService
+    - Endpoint: /question-submissions, /admin/submissions/{id}/approve|reject
+    - Kalite kontrol (auto approve vs admin_review)
+    - +10 puan verme ve geri alma
+    - Red gerekçesi zorunlu
+
+  Kart S2-04 - Import Önizleme ve İdempotency
+    - Migration: question_import_batches, question_import_errors, question_import_rows
+    - Service: QuestionImportService, ImportDedupService
+    - Endpoint: /admin/questions/import
+    - Hash hesabı (MD5)
+    - İdempotency (skip|merge|manual_review)
+    - Hata raporu (indirilebilir CSV)
+
+  Kart S2-05 - Audit, Versioning, Rollback
+    - Migration: question_versions (retention policy)
+    - Service: QuestionVersionService, AuditLogService
+    - Endpoint: Version listesi, rollback, diff görünümü
+    - Rollback race condition handling
+    - Etkilenen testler flagleme
+
+Sprint 3 - Feedback Mode ve Test Motor Optimizasyon (1.5 hafta):
+
+  Kart S3-01 - Test Feedback Modes Implementation
+    - Enum: INSTANT_FEEDBACK_LOCKED | DELAYED_FEEDBACK | NO_FEEDBACK
+    - Setting'de mod seçimi
+    - Test çözüm ekranında mod kontrol
+    - Cevap kilitlemesi (INSTANT_FEEDBACK_LOCKED)
+    - Geri bildirim gecikmesi (DELAYED_FEEDBACK)
+
+  Kart S3-02 - Test Sonucu ve İstatistik Görüntüleme
+    - Endpoint: /tests/{id}/review
+    - Sonuç ekranı (puan, doğru/yanlış/boş, detay)
+    - Kullanıcı dashboard (KPI kartları)
+    - En çok yanlış 50 soru listesi
+
+Sprint 4 - UI/UX Implementation (2 hafta):
+
+  Kart S4-01 - Test Çözüm Ekranı UI
+    - Single soru per page
+    - İleri/Geri navigasyon
+    - Sticky sayaç (30 dk)
+    - Yazı boyutu seçeneği (localStorage)
+    - İtiraz ve Puanla ikonları (modals)
+    - Mobil responsive
+
+  Kart S4-02 - Test Başlat Modal
+    - 3 mod seçeneği (radio buttons)
+    - Zorluk range slider
+    - Takıldıklarım no-option
+    - Fallback bildirim mesajı
+
+  Kart S4-03 - Leaderboard UI
+    - Sekmeli yapı (Genel + Ders)
+    - Ders dropdown (arama + pin)
+    - Tablo (Rank, Ad, Puan)
+    - Zaman filtresi
+
+  Kart S4-04 - Admin Dashboard
+    - KPI kartları (total users, total Q, pending approvals, daily tests)
+    - Zaman filtresi (Today/Week/Month/All)
+    - Kalite kuyruğu kartları
+    - Import status
+
+Sprint 5 - Güvenlik ve Performance (1.5 hafta):
+
+  Kart S5-01 - Güvenlik Hardening
+    - CSRF strategy finalize (token-based)
+    - XSS sanitization (import, soru metni)
+    - SQL injection prevention (query builder)
+    - Rate limit testing
+    - Admin şifre doğrulama TTL implementasyon
+
+  Kart S5-02 - Performance Optimization
+    - Database indexing (all from day 1 list)
+    - Query optimization (eager loading, N+1 prevention)
+    - Cache strategy (Redis/File)
+    - Staging load test (300 concurrent)
+    - Monitoring setup
+
+  Kart S5-03 - Testing Suite
+    - Unit tests (puanlama, süre, soru seçimi)
+    - Feature tests (auth, role, workflow)
+    - Integration tests (stats update, leaderboard)
+    - Security tests (XSS, SQL injection, CSRF)
+    - Performance tests (concurrent, load)
+
+Sprint 6 - Yayın Hazırlığı (1 hafta):
+
+  Kart S6-01 - Migration ve Seeding
+    - Production migrations
+    - Seed data
+    - Backup test
+
+  Kart S6-02 - Deployment Checklist
+    - .env production
+    - SSL
+    - Cron jobs
+    - Queue worker
+    - Monitoring
+    - Error tracking
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+19) Açık Konu Durumu
+
+v1 için kritik kararlar büyük ölçüde kapatıldı.
+
+v1.1 Backlog Adayları:
+  - Soru yorumları ve beğeni sistemi
+  - Kullanıcılar arası düello modu (aynı test, aynı ders)
+  - Medya destekli soru (görsel, ses, video)
+  - CSV/PDF dışa aktarma (raporlama)
+  - Toplu ders taşıma ve toplu silme
+  - Gamification (günlük hedef, streak, haftalık gelişim)
+  - Blueprint test şablonları (konu/zorluk kompozisyonu)
+  - İleri seviye anti-cheat senaryoları
+  - Kullanıcı profil gizliliği toggle
+  - Balanced zorluk dağılımı (easy:medium:hard = 25:50:25)
+  - FULLTEXT search
+  - Redis Queue (Database Queue yerine)
+  - Medya storage (S3, GDrive backup)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+20) Önerdiğim Ek Özellikler (Long-term Vision)
+
+Soru etiket sistemi ve konu bazlı filtreleme (v1.1+)
+
+Yanlış yapılan sorulardan otomatik "tekrar testi" üretme
+
+Günlük hedef/seri (streak) sistemi ile motivasyon artırma
+
+Soru kalite puanı (kullanıcı geri bildirimiyle düşük kaliteli soruları tespit)
+
+Bildirim sistemi (onaylanan kullanıcı sorusu, başarı rozetleri, yeni test sonucu)
+
+Veri dışa aktarma (kullanıcı ve yönetici için PDF/CSV rapor)
+
+Sınavı taklaya yönelik deteksiyon (tab değişim sayısı, IP değişimi, mouse activity)
+
+API rate limiting (third-party integrations için)
+
+İstatistik grafikleri (performans trendi, zorluk dağılımı)
+
+Kullanıcı karşılaştırması (head-to-head performance)
+
+Student progress reports (öğretmen için)
+
+═══════════════════════════════════════════════════════════════════════════════════════
+
+ÖZETLEYİŞ
+
+Bu dokuman v1 planının tüm belirsizliklerini, çelişkilerini ve eksikliklerini düzeltmiştir:
+
+✓ Test Feedback modları kesin tanım (INSTANT_FEEDBACK_LOCKED vs DELAYED_FEEDBACK)
+✓ Takıldıklarım fallback algoritması detaylı belirtilmiş
+✓ Leaderboard tie-breaker kuralları kesin (ORDER BY sırası)
+✓ Import idempotency stratejisi kesin (MD5 hash, skip/merge/manual_review)
+✓ Rollback race condition handling
+✓ Admin şifre doğrulama TTL (10 dakika)
+✓ Bakım modu davranışı kesin
+✓ Sekme değişim uyarısı kuralı
+✓ Soru versiyonlama retention policy
+✓ Audit log tablosu şeması
+✓ Database connection pool tuning değerleri
+✓ Leaderboard global vs subject ayrı tablolar
+✓ UI/UX tasarımları detaylı belirtilmiş
+✓ API error codes kesin tanım
+✓ Test başlatma modalında UI mockup açıklamaları
+✓ Gönderdiğim sorular status takibi
+✓ Red gerekçesi validation
+✓ Puan geri alma mekanizması
+✓ Tüm Sprint görev kartları detaylı
+
+Dokuman şu anda production-ready bir plan haline gelmiştir.
+
+═══════════════════════════════════════════════════════════════════════════════════════
