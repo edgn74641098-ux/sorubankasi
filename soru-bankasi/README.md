@@ -1,66 +1,140 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Soru Bankasi
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 10 ile hazirlanmis, cPanel/shared hosting uyumlu soru bankasi uygulamasi.
 
-## About Laravel
+## Ozellikler
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Breeze auth, e-posta dogrulama ve rol tabanli yetkilendirme
+- Roller: `admin`, `editor`, `user`
+- Ders ve soru yonetimi
+- Soru versiyon gecmisi ve rollback
+- 20 soru / 30 dakika test motoru
+- Random, zorluk araligi ve takildiklarim test modlari
+- Delayed, instant locked ve no feedback modlari
+- Kullanici soru onerisi, onay/red, +10 puan ve geri alma
+- CSV import: preview, confirm, skip/merge/manual review
+- Snapshot tabanli global ve ders leaderboard
+- Admin dashboard, kullanici/rol yonetimi, ayarlar ve audit log
+- cPanel icin file cache, database queue, cron komutlari ve backup komutu
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Local Kurulum
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+npm install
+npm run build
+php artisan serve
+```
 
-## Learning Laravel
+Varsayilan admin:
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- E-posta: `admin@sorubank.com`
+- Sifre: `password`
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## Test
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+php artisan test
+```
 
-## Laravel Sponsors
+## API Durumu
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Sanctum token ile, e-postasi dogrulanmis kullanicilar icin aktif API endpointleri:
 
-### Premium Partners
+```text
+GET    /api/subjects
+GET    /api/subjects/{subject}
+GET    /api/tests
+GET    /api/tests/{test}
+POST   /api/tests/{test}/answer
+POST   /api/tests/{test}/finish
+GET    /api/leaderboard
+GET    /api/leaderboard/subject/{subject}
+GET    /api/profile
+PATCH  /api/profile
+GET    /api/questions/submissions
+POST   /api/questions/submit
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+Bu endpointler web ekranlariyla ayni yetkilendirme, dogrulama ve limit kurallarini kullanir.
 
-## Contributing
+## Tema Standardi
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Projenin ortak tema kurallari `THEME_STANDARD.md` dosyasindadir. Yeni ekran veya component gelistirirken bu standardin disina cikilmez.
 
-## Code of Conduct
+Ortak tema kaynagi:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```text
+public/css/sorubank-theme.css
+```
 
-## Security Vulnerabilities
+Tema karari:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- Tum proje admin panelindeki stabil Bootstrap tabanli duzeni kullanir.
+- Bootstrap CSS/JS CDN'den degil yerel Vite bundle'dan yuklenir.
+- Public, auth, kullanici ve admin ekranlarinda renk, radius, bosluk ve yuzey kurallari `sorubank-theme.css` tokenlarina baglidir.
+- Yeni ekranlarda Tailwind odakli layout yazilmaz; Bootstrap grid, card, table, form ve button bilesenleri tercih edilir.
 
-## License
+Deploy oncesi cache smoke kontrolu:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan route:cache
+php artisan view:cache
+php artisan config:cache
+php artisan route:clear
+php artisan view:clear
+php artisan config:clear
+```
+
+## cPanel Ayarlari
+
+Production `.env` icin onerilen degerler:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+CACHE_DRIVER=file
+QUEUE_CONNECTION=database
+SESSION_DRIVER=cookie
+LOG_CHANNEL=single
+```
+
+Cron:
+
+```bash
+*/5 * * * * cd /home/USER/soru-bankasi && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Planlanan komutlar:
+
+- `leaderboard:snapshot`
+- `queue:work --once --max-jobs=10`
+- `cleanup:audit-logs --days=90`
+- `backup:database`
+
+`backup_mode=automatic` secildiginde `backup:database` komutu scheduler tarafindan her gun 03:00'te calistirilir.
+
+Health check:
+
+```text
+/health
+```
+
+## Google ile Giris
+
+Google Cloud Console'da OAuth Client olusturup redirect URI olarak sunu ekleyin:
+
+```text
+http://127.0.0.1:8000/auth/google/callback
+```
+
+Sonra `.env` dosyasina degerleri girin:
+
+```env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
+```

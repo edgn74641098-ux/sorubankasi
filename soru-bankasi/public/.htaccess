@@ -5,6 +5,15 @@
 
     RewriteEngine On
 
+    # Block accidental access to sensitive files when deployed under public_html.
+    <FilesMatch "^(\.env|\.git|composer\.(json|lock)|package(-lock)?\.json)$">
+        Require all denied
+    </FilesMatch>
+
+    <FilesMatch "^\.">
+        Require all denied
+    </FilesMatch>
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -18,4 +27,8 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
 </IfModule>

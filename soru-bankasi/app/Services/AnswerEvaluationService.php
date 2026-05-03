@@ -1,0 +1,60 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Test;
+use App\Models\TestItem;
+use Illuminate\Support\Carbon;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+
+class AnswerEvaluationService
+{
+    public function __construct(
+        private readonly SettingsService $settingsService
+    ) {
+    }
+
+    public function evaluate(Test $test, TestItem $testItem, ?string $answer): array
+    {
+        if ($test->status !== 'active') {
+            throw new HttpException(422, 'Bu test artık aktif değil.');
+        }
+
+        $mode = $test->feedback_mode ?: $this->settingsService->getString('test_feedback_mode', 'DELAYED_FEEDBACK');
+        $normalizedAnswer = $answer ? strtoupper($answer) : null;
+
+        if ($normalizedAnswer !== null && ! in_array($normalizedAnswer, ['A', 'B', 'C', 'D', 'E'], true)) {
+            throw new HttpException(422, 'Geçersiz cevap seçeneği.');
+        }
+
+        $payload = [
+            'saved' => true,
+            'feedback_mode' => $mode,
+            'locked' => false,
+            'is_correct' => null,
+            'explanation' => null,
+        ];
+
+        if ($mode === 'INSTANT_FEEDBACK_LOCKED' && $testItem->answered_at !== null) {
+            throw new HttpException(422, 'Bu soru için cevap kilitlendi.');
+        }
+
+        $update = [
+            'user_answer' => $normalizedAnswer,
+            'answered_at' => Carbon::now(),
+        ];
+
+        if ($mode === 'INSTANT_FEEDBACK_LOCKED') {
+            $isCorrect = $normalizedAnswer !== null && $normalizedAnswer === $testItem->question->correct_option;
+            $update['is_correct'] = $isCorrect;
+
+            $payload['locked'] = true;
+            $payload['is_correct'] = $isCorrect;
+            $payload['explanation'] = $testItem->question->explanation_text;
+        }
+
+        $testItem->update($update);
+
+        return $payload;
+    }
+}

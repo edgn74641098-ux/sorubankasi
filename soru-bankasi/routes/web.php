@@ -1,7 +1,21 @@
 <?php
 
+use App\Http\Controllers\Admin\QuestionController as AdminQuestionController;
+use App\Http\Controllers\Admin\QuestionImportController;
+use App\Http\Controllers\Admin\QuestionVersionController;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\SubjectController as AdminSubjectController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HealthController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SubjectController;
+use App\Http\Controllers\TestController;
+use App\Http\Controllers\UserSubmittedQuestionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -15,22 +29,72 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', HomeController::class);
+Route::get('/health', HealthController::class)->name('health');
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', DashboardController::class)
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::get('/subjects', [SubjectController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('subjects.index');
 
+Route::middleware(['auth', 'verified', 'role:admin,editor'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        Route::get('/', AdminDashboardController::class)->name('dashboard');
+
+        Route::resource('subjects', AdminSubjectController::class)
+            ->except(['show']);
+
+        Route::resource('questions', AdminQuestionController::class)
+            ->except(['show']);
+        Route::get('questions/{question}/versions', [QuestionVersionController::class, 'index'])->name('questions.versions.index');
+        Route::post('questions/{question}/versions/{version}/rollback', [QuestionVersionController::class, 'rollback'])->name('questions.versions.rollback');
+
+        Route::get('imports', [QuestionImportController::class, 'index'])->name('imports.index');
+        Route::post('imports', [QuestionImportController::class, 'store'])->name('imports.store');
+        Route::get('imports/{import}', [QuestionImportController::class, 'show'])->name('imports.show');
+        Route::post('imports/{import}/confirm', [QuestionImportController::class, 'confirm'])->name('imports.confirm');
+
+        Route::middleware('role:admin')->group(function () {
+            Route::get('users', [AdminUserController::class, 'index'])->name('users.index');
+            Route::patch('users/{user}/role', [AdminUserController::class, 'updateRole'])->name('users.update-role');
+
+            Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+            Route::put('settings', [SettingsController::class, 'update'])->middleware('reconfirm.password')->name('settings.update');
+
+            Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+        });
+
+        // User submitted questions (moderation)
+        Route::get('submissions', [UserSubmittedQuestionController::class, 'pendingReview'])->name('submissions.pending');
+        Route::post('submissions/{submission}/approve', [UserSubmittedQuestionController::class, 'approve'])->name('submissions.approve');
+        Route::post('submissions/{submission}/reject', [UserSubmittedQuestionController::class, 'reject'])->name('submissions.reject');
+        Route::post('submissions/{submission}/revoke', [UserSubmittedQuestionController::class, 'revokeApproval'])->name('submissions.revoke');
+    });
+
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/tests/start', [TestController::class, 'create'])->name('tests.create');
+    Route::post('/tests/start', [TestController::class, 'start'])->name('tests.start');
+    Route::get('/tests/{test}', [TestController::class, 'show'])->name('tests.show');
+    Route::post('/tests/{test}/answer', [TestController::class, 'answer'])->name('tests.answer');
+    Route::post('/tests/{test}/finish', [TestController::class, 'finish'])->name('tests.finish');
+    Route::get('/tests/{test}/review', [TestController::class, 'review'])->name('tests.review');
+    Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
+
+    // User submitted questions
+    Route::get('/questions/submit', [UserSubmittedQuestionController::class, 'create'])->name('questions.create');
+    Route::post('/questions/submit', [UserSubmittedQuestionController::class, 'store'])->name('questions.store');
+    Route::get('/questions/my-submissions', [UserSubmittedQuestionController::class, 'myQuestions'])->name('questions.submitted');
 });
 
 require __DIR__.'/auth.php';
