@@ -9,6 +9,12 @@ export default {
         './resources/views/**/*.blade.php',
     ],
 
+    // Bootstrap navbar uses `.collapse`; Tailwind's same-named utility sets
+    // `visibility: collapse` and hides the menu while keeping layout — disable it.
+    corePlugins: {
+        collapse: false,
+    },
+
     theme: {
         extend: {
             fontFamily: {

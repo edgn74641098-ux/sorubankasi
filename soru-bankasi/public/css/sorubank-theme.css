@@ -457,6 +457,50 @@ a:hover {
     color: var(--sb-brand-dark);
 }
 
+/* Uygulama navbar: Tailwind `.collapse` ile Bootstrap cakismasini onlemek icin
+   `collapse` sinifi kullanilmiyor; buyuk ekranda menu her zaman gorunur. */
+.sb-app-navbar {
+    position: relative;
+    z-index: 1030;
+}
+
+.sb-app-navbar .sb-navbar-menu {
+    flex-grow: 1;
+}
+
+@media (min-width: 992px) {
+    .sb-app-navbar .sb-navbar-menu {
+        display: flex !important;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    .sb-app-navbar .sb-navbar-menu .navbar-nav {
+        flex-direction: row;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .sb-app-navbar .sb-navbar-menu:not(.is-open) {
+        display: none !important;
+    }
+
+    .sb-app-navbar .sb-navbar-menu.is-open {
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        padding-top: 0.75rem;
+        padding-bottom: 0.5rem;
+    }
+
+    .sb-app-navbar .sb-navbar-menu.is-open .dropdown {
+        width: 100%;
+    }
+}
+
 .sb-page {
     padding-bottom: 3rem;
     padding-top: 2rem;

@@ -11,6 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 class LeaderboardSnapshotService
 {
+    public function __construct(
+        private readonly SettingsService $settingsService
+    ) {
+    }
+
     public function generate(?CarbonImmutable $snapshotAt = null): void
     {
         $snapshotAt ??= CarbonImmutable::now()->startOfMinute();
@@ -49,17 +54,24 @@ class LeaderboardSnapshotService
         });
     }
 
+    private function minimumFinishedTests(): int
+    {
+        return max(1, min(20, $this->settingsService->getInt('minimum_leaderboard_tests', 3)));
+    }
+
     private function buildGlobalRows(CarbonImmutable $windowStart): array
     {
+        $minTests = $this->minimumFinishedTests();
+
         $rows = Test::query()
-            ->selectRaw('user_id, SUM(score) as total_score, SUM(wrong_count) as total_wrong, MIN(ended_at) as first_finish')
+            ->selectRaw('user_id, SUM(score) as total_score, SUM(wrong_count) as total_wrong, SUM(correct_count) as total_correct, SUM(question_count) as total_questions, MIN(ended_at) as first_finish')
             ->where('status', 'finished')
             ->where('aborted', false)
             ->where('question_count', 20)
             ->where('duration_minutes', '<=', 30)
             ->where('ended_at', '>=', $windowStart)
             ->groupBy('user_id')
-            ->havingRaw('COUNT(*) >= 3')
+            ->havingRaw('COUNT(*) >= ?', [$minTests])
             ->orderByDesc('total_score')
             ->orderBy('total_wrong')
             ->orderBy('first_finish')
@@ -71,6 +83,9 @@ class LeaderboardSnapshotService
             $payload[] = [
                 'user_id' => (int) $row->user_id,
                 'score' => (int) $row->total_score,
+                'questions_total' => (int) $row->total_questions,
+                'correct_total' => (int) $row->total_correct,
+                'wrong_total' => (int) $row->total_wrong,
                 'rank' => $rank++,
             ];
         }
@@ -82,9 +97,11 @@ class LeaderboardSnapshotService
     {
         $payload = [];
 
-        Subject::query()->where('is_active', true)->pluck('id')->each(function (int $subjectId) use (&$payload, $windowStart) {
+        $minTests = $this->minimumFinishedTests();
+
+        Subject::query()->where('is_active', true)->pluck('id')->each(function (int $subjectId) use (&$payload, $windowStart, $minTests) {
             $rows = Test::query()
-                ->selectRaw('user_id, SUM(score) as total_score, SUM(wrong_count) as total_wrong, MIN(ended_at) as first_finish')
+                ->selectRaw('user_id, SUM(score) as total_score, SUM(wrong_count) as total_wrong, SUM(correct_count) as total_correct, SUM(question_count) as total_questions, MIN(ended_at) as first_finish')
                 ->where('status', 'finished')
                 ->where('aborted', false)
                 ->where('question_count', 20)
@@ -92,7 +109,7 @@ class LeaderboardSnapshotService
                 ->where('subject_id', $subjectId)
                 ->where('ended_at', '>=', $windowStart)
                 ->groupBy('user_id')
-                ->havingRaw('COUNT(*) >= 3')
+                ->havingRaw('COUNT(*) >= ?', [$minTests])
                 ->orderByDesc('total_score')
                 ->orderBy('total_wrong')
                 ->orderBy('first_finish')
@@ -104,6 +121,9 @@ class LeaderboardSnapshotService
                     'subject_id' => $subjectId,
                     'user_id' => (int) $row->user_id,
                     'score' => (int) $row->total_score,
+                    'questions_total' => (int) $row->total_questions,
+                    'correct_total' => (int) $row->total_correct,
+                    'wrong_total' => (int) $row->total_wrong,
                     'rank' => $rank++,
                 ];
             }

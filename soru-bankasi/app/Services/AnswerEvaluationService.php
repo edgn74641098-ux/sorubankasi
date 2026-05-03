@@ -17,14 +17,14 @@ class AnswerEvaluationService
     public function evaluate(Test $test, TestItem $testItem, ?string $answer): array
     {
         if ($test->status !== 'active') {
-            throw new HttpException(422, 'Bu test artık aktif değil.');
+            throw $this->httpException(422, 'inactive_test', 'Bu test artık aktif değil.');
         }
 
         $mode = $test->feedback_mode ?: $this->settingsService->getString('test_feedback_mode', 'DELAYED_FEEDBACK');
         $normalizedAnswer = $answer ? strtoupper($answer) : null;
 
         if ($normalizedAnswer !== null && ! in_array($normalizedAnswer, ['A', 'B', 'C', 'D', 'E'], true)) {
-            throw new HttpException(422, 'Geçersiz cevap seçeneği.');
+            throw $this->httpException(422, 'invalid_answer', 'Geçersiz cevap seçeneği.');
         }
 
         $payload = [
@@ -36,7 +36,7 @@ class AnswerEvaluationService
         ];
 
         if ($mode === 'INSTANT_FEEDBACK_LOCKED' && $testItem->answered_at !== null) {
-            throw new HttpException(422, 'Bu soru için cevap kilitlendi.');
+            throw $this->httpException(422, 'answer_locked', 'Bu soru için cevap kilitlendi.');
         }
 
         $update = [
@@ -56,5 +56,13 @@ class AnswerEvaluationService
         $testItem->update($update);
 
         return $payload;
+    }
+
+    private function httpException(int $status, string $error, string $message): HttpException
+    {
+        return new HttpException($status, json_encode([
+            'error' => $error,
+            'message' => $message,
+        ], JSON_UNESCAPED_UNICODE));
     }
 }

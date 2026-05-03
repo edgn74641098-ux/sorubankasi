@@ -30,6 +30,9 @@ class ApiEndpointTest extends TestCase
         LeaderboardGlobalSnapshot::query()->create([
             'user_id' => $other->id,
             'score' => 240,
+            'questions_total' => 60,
+            'correct_total' => 48,
+            'wrong_total' => 12,
             'rank' => 1,
             'snapshot_at' => $snapshotAt,
         ]);
@@ -37,6 +40,9 @@ class ApiEndpointTest extends TestCase
             'subject_id' => $subject->id,
             'user_id' => $user->id,
             'score' => 120,
+            'questions_total' => 40,
+            'correct_total' => 24,
+            'wrong_total' => 16,
             'rank' => 2,
             'snapshot_at' => $snapshotAt,
         ]);
@@ -56,12 +62,19 @@ class ApiEndpointTest extends TestCase
         $this->getJson('/api/leaderboard')
             ->assertOk()
             ->assertJsonPath('rows.0.user_name', 'Ranked User')
-            ->assertJsonPath('rows.0.rank', 1);
+            ->assertJsonPath('rows.0.rank', 1)
+            ->assertJsonPath('rows.0.questions_total', 60)
+            ->assertJsonPath('rows.0.correct_total', 48)
+            ->assertJsonPath('rows.0.wrong_total', 12)
+            ->assertJsonPath('my_rank', null);
 
         $this->getJson("/api/leaderboard/subject/{$subject->id}")
             ->assertOk()
             ->assertJsonPath('subject.name', 'Matematik')
-            ->assertJsonPath('my_rank.rank', 2);
+            ->assertJsonPath('my_rank.rank', 2)
+            ->assertJsonPath('my_rank.questions_total', 40)
+            ->assertJsonPath('my_rank.correct_total', 24)
+            ->assertJsonPath('my_rank.wrong_total', 16);
     }
 
     public function test_authenticated_api_can_update_profile_and_manage_submissions(): void

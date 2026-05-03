@@ -13,6 +13,9 @@ class LeaderboardGlobalSnapshot extends Model
     protected $fillable = [
         'user_id',
         'score',
+        'questions_total',
+        'correct_total',
+        'wrong_total',
         'rank',
         'snapshot_at',
     ];

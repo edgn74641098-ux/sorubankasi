@@ -31,17 +31,22 @@
                             <thead>
                                 <tr>
                                     <th>Satır</th>
+                                    <th>Soru (dosyadan)</th>
+                                    <th>Doğru</th>
                                     <th>Hash</th>
-                                    <th>Eşleşen Soru</th>
+                                    <th>Eşleşen</th>
                                     <th>Aksiyon</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @forelse($batch->rows as $row)
+                                    @php($payload = $row->payload_json ?? [])
                                     <tr>
                                         <td>#{{ $loop->iteration }}</td>
-                                        <td><code>{{ $row->question_hash }}</code></td>
-                                        <td>
+                                        <td class="small" style="max-width: 22rem;">{{ \Illuminate\Support\Str::limit($payload['question_text'] ?? '—', 160) }}</td>
+                                        <td><code>{{ $payload['correct_option'] ?? '—' }}</code></td>
+                                        <td><code class="small">{{ $row->question_hash }}</code></td>
+                                        <td class="small">
                                             @if($row->matchedQuestion)
                                                 {{ \Illuminate\Support\Str::limit($row->matchedQuestion->question_text, 80) }}
                                             @else
@@ -63,7 +68,7 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="4" class="text-muted">Önizleme satırı yok.</td></tr>
+                                    <tr><td colspan="6" class="text-muted">Önizleme satırı yok.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -71,6 +76,46 @@
                 </div>
             </div>
         </form>
+    @else
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h5 mb-3">İşlenen satırlar</h2>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>Satır</th>
+                                <th>Soru (yüklenen)</th>
+                                <th>Doğru</th>
+                                <th>Hash</th>
+                                <th>Eşleşen / sonuç</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($batch->rows as $row)
+                                @php($payload = $row->payload_json ?? [])
+                                <tr>
+                                    <td>#{{ $loop->iteration }}</td>
+                                    <td class="small" style="max-width: 22rem;">{{ \Illuminate\Support\Str::limit($payload['question_text'] ?? '—', 160) }}</td>
+                                    <td><code>{{ $payload['correct_option'] ?? '—' }}</code></td>
+                                    <td><code class="small">{{ $row->question_hash }}</code></td>
+                                    <td class="small">
+                                        @if($row->matchedQuestion)
+                                            <span class="text-muted">Mevcut:</span> {{ \Illuminate\Support\Str::limit($row->matchedQuestion->question_text, 60) }}
+                                        @else
+                                            <span class="text-muted">Yeni</span>
+                                        @endif
+                                        <div class="mt-1"><span class="badge bg-secondary">{{ $row->action }}</span></div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="5" class="text-muted">Satır yok.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     @endif
 
     <div class="card border-0 shadow-sm">

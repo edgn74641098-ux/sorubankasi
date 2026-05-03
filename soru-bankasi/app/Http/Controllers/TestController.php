@@ -125,11 +125,21 @@ class TestController extends Controller
         $testItem = $test->items->firstWhere('id', $validated['test_item_id']);
         abort_unless($testItem, 404);
 
-        $result = $this->answerEvaluationService->evaluate(
-            $test,
-            $testItem,
-            $validated['answer'] ?? null
-        );
+        try {
+            $result = $this->answerEvaluationService->evaluate(
+                $test,
+                $testItem,
+                $validated['answer'] ?? null
+            );
+        } catch (HttpException $exception) {
+            $payload = json_decode($exception->getMessage(), true);
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'answer' => $payload['message'] ?? $exception->getMessage(),
+                ], 'default');
+        }
 
         $nextIndex = match ($validated['action'] ?? 'stay') {
             'prev' => max(1, $validated['current_index'] - 1),
@@ -260,13 +270,22 @@ class TestController extends Controller
         $testItem = $test->items->firstWhere('id', $validated['test_item_id']);
         abort_unless($testItem, 404);
 
-        $result = $this->answerEvaluationService->evaluate(
-            $test,
-            $testItem,
-            $validated['answer'] ?? null
-        );
+        try {
+            $result = $this->answerEvaluationService->evaluate(
+                $test,
+                $testItem,
+                $validated['answer'] ?? null
+            );
 
-        return response()->json($result);
+            return response()->json($result);
+        } catch (HttpException $exception) {
+            $payload = json_decode($exception->getMessage(), true);
+
+            return response()->json([
+                'message' => $payload['message'] ?? $exception->getMessage(),
+                'error' => $payload['error'] ?? 'answer_error',
+            ], $exception->getStatusCode());
+        }
     }
 
     /**

@@ -8,6 +8,14 @@
             <div class="col-lg-10">
                 @php($feedback = session('answer_feedback'))
 
+                @if (session('success'))
+                    <div class="alert alert-success">{{ session('success') }}</div>
+                @endif
+
+                @if (session('info'))
+                    <div class="alert alert-info">{{ session('info') }}</div>
+                @endif
+
                 <div class="card sb-sticky-toolbar mb-3">
                     <div class="card-body py-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
                         <div class="fw-semibold">Soru {{ $currentIndex }} / {{ $totalItems }}</div>

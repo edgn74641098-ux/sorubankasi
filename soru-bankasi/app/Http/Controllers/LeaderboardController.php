@@ -5,13 +5,21 @@ namespace App\Http\Controllers;
 use App\Models\LeaderboardGlobalSnapshot;
 use App\Models\LeaderboardSubjectSnapshot;
 use App\Models\Subject;
+use App\Models\UserWrongQuestionStat;
+use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\View\View;
 
 class LeaderboardController extends Controller
 {
+    public function __construct(
+        private readonly SettingsService $settingsService
+    ) {
+    }
+
     public function index(): View
     {
+        $leaderboardMinTests = max(1, min(20, $this->settingsService->getInt('minimum_leaderboard_tests', 3)));
         $globalSnapshotAt = LeaderboardGlobalSnapshot::query()->max('snapshot_at');
 
         $globalRows = collect();
@@ -44,11 +52,20 @@ class LeaderboardController extends Controller
         $subjectSnapshotAt = null;
         $subjectRows = collect();
         $mySubjectRank = null;
+        $wrongQuestionCount = 0;
 
         if ($selectedSubjectId) {
             $subjectSnapshotAt = LeaderboardSubjectSnapshot::query()
                 ->where('subject_id', $selectedSubjectId)
                 ->max('snapshot_at');
+
+            $wrongQuestionCount = UserWrongQuestionStat::query()
+                ->where('user_id', auth()->id())
+                ->whereHas('question', function ($query) use ($selectedSubjectId) {
+                    $query->where('subject_id', $selectedSubjectId)
+                        ->where('status', 'active');
+                })
+                ->count();
 
             if ($subjectSnapshotAt) {
                 $subjectRows = LeaderboardSubjectSnapshot::query()
@@ -76,6 +93,9 @@ class LeaderboardController extends Controller
             'subjectRows' => $subjectRows,
             'myGlobalRank' => $myGlobalRank,
             'mySubjectRank' => $mySubjectRank,
+            'wrongQuestionCount' => $wrongQuestionCount,
+            'leaderboardMinTests' => $leaderboardMinTests,
+            'leaderboardWindowDays' => 30,
         ]);
     }
 
@@ -102,6 +122,9 @@ class LeaderboardController extends Controller
                 'user_id' => $row->user_id,
                 'user_name' => $row->user?->name,
                 'score' => $row->score,
+                'questions_total' => (int) $row->questions_total,
+                'correct_total' => (int) $row->correct_total,
+                'wrong_total' => (int) $row->wrong_total,
             ]);
 
         $myRank = LeaderboardGlobalSnapshot::query()
@@ -115,6 +138,9 @@ class LeaderboardController extends Controller
             'my_rank' => $myRank ? [
                 'rank' => $myRank->rank,
                 'score' => $myRank->score,
+                'questions_total' => (int) $myRank->questions_total,
+                'correct_total' => (int) $myRank->correct_total,
+                'wrong_total' => (int) $myRank->wrong_total,
             ] : null,
         ]);
     }
@@ -152,6 +178,9 @@ class LeaderboardController extends Controller
                 'user_id' => $row->user_id,
                 'user_name' => $row->user?->name,
                 'score' => $row->score,
+                'questions_total' => (int) $row->questions_total,
+                'correct_total' => (int) $row->correct_total,
+                'wrong_total' => (int) $row->wrong_total,
             ]);
 
         $myRank = LeaderboardSubjectSnapshot::query()
@@ -171,6 +200,9 @@ class LeaderboardController extends Controller
             'my_rank' => $myRank ? [
                 'rank' => $myRank->rank,
                 'score' => $myRank->score,
+                'questions_total' => (int) $myRank->questions_total,
+                'correct_total' => (int) $myRank->correct_total,
+                'wrong_total' => (int) $myRank->wrong_total,
             ] : null,
         ]);
     }

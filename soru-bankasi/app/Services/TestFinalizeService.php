@@ -17,6 +17,33 @@ class TestFinalizeService
             return $test->load(['items.question', 'subject', 'user']);
         }
 
+        $result = $this->finalizeInTransaction($test);
+        $this->regenerateLeaderboardSnapshotQuietly();
+
+        return $result;
+    }
+
+    public function finalizeExpiredForUser(int $userId): void
+    {
+        $tests = Test::query()
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->where('started_at', '<=', Carbon::now()->subMinutes(30))
+            ->get();
+
+        $finalizedAny = false;
+        foreach ($tests as $test) {
+            $this->finalizeInTransaction($test);
+            $finalizedAny = true;
+        }
+
+        if ($finalizedAny) {
+            $this->regenerateLeaderboardSnapshotQuietly();
+        }
+    }
+
+    private function finalizeInTransaction(Test $test): Test
+    {
         return DB::transaction(function () use ($test) {
             $test->loadMissing(['items.question', 'user', 'subject']);
 
@@ -98,13 +125,12 @@ class TestFinalizeService
         });
     }
 
-    public function finalizeExpiredForUser(int $userId): void
+    private function regenerateLeaderboardSnapshotQuietly(): void
     {
-        Test::query()
-            ->where('user_id', $userId)
-            ->where('status', 'active')
-            ->where('started_at', '<=', Carbon::now()->subMinutes(30))
-            ->get()
-            ->each(fn (Test $test) => $this->finalize($test));
+        try {
+            app(LeaderboardSnapshotService::class)->generate();
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

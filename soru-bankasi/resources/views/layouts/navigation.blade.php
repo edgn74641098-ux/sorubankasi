@@ -5,11 +5,19 @@
             <span>Soru Bankasi</span>
         </a>
 
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#appNavbar" aria-controls="appNavbar" aria-expanded="false" aria-label="Menu">
+        <button
+            class="navbar-toggler d-lg-none"
+            type="button"
+            id="appNavbarToggler"
+            aria-controls="appNavbar"
+            aria-expanded="false"
+            aria-label="Menu"
+        >
             <span class="navbar-toggler-icon"></span>
         </button>
 
-        <div class="collapse navbar-collapse" id="appNavbar">
+        {{-- Bootstrap `.collapse` ile Tailwind `.collapse` cakisir; menu acilmasini kendimiz yonetiyoruz. --}}
+        <div class="navbar-collapse sb-navbar-menu" id="appNavbar">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                 <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('dashboard') ? 'active fw-semibold' : '' }}" href="{{ route('dashboard') }}">Panel</a>
@@ -50,4 +58,23 @@
             </div>
         </div>
     </div>
+    <script>
+        (function () {
+            var toggler = document.getElementById('appNavbarToggler');
+            var panel = document.getElementById('appNavbar');
+            if (!toggler || !panel) {
+                return;
+            }
+            toggler.addEventListener('click', function () {
+                var open = panel.classList.toggle('is-open');
+                toggler.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            window.matchMedia('(min-width: 992px)').addEventListener('change', function (e) {
+                if (e.matches) {
+                    panel.classList.remove('is-open');
+                    toggler.setAttribute('aria-expanded', 'false');
+                }
+            });
+        })();
+    </script>
 </nav>

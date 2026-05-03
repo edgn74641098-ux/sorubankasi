@@ -55,15 +55,7 @@ class QuestionImportService
                     ->whereRaw('LOWER(TRIM(question_text)) = ?', [mb_strtolower(trim($normalized['question_text']))])
                     ->first();
 
-                QuestionImportRow::query()->create([
-                    'batch_id' => $batch->id,
-                    'question_hash' => $hash,
-                    'action' => 'pending',
-                    'matched_question_id' => $matchedQuestion?->id,
-                ]);
-
-                $validRows[] = [
-                    'row_number' => $rowNumber,
+                $rowPayload = [
                     'subject_id' => $subjectId,
                     'question_text' => $normalized['question_text'],
                     'option_a' => $normalized['option_a'],
@@ -73,9 +65,21 @@ class QuestionImportService
                     'option_e' => $normalized['option_e'],
                     'correct_option' => $normalized['correct_option'],
                     'explanation_text' => $normalized['explanation_text'],
+                ];
+
+                QuestionImportRow::query()->create([
+                    'batch_id' => $batch->id,
+                    'question_hash' => $hash,
+                    'action' => 'pending',
+                    'matched_question_id' => $matchedQuestion?->id,
+                    'payload_json' => $rowPayload,
+                ]);
+
+                $validRows[] = array_merge([
+                    'row_number' => $rowNumber,
                     'question_hash' => $hash,
                     'matched_question_id' => $matchedQuestion?->id,
-                ];
+                ], $rowPayload);
 
                 $successCount++;
             } catch (\Throwable $e) {
@@ -104,6 +108,10 @@ class QuestionImportService
     public function confirm(QuestionImportBatch $batch, array $actions, User $actor): array
     {
         $previewRows = Cache::get($this->previewCacheKey($batch->id), []);
+        if (empty($previewRows)) {
+            $previewRows = $this->loadPreviewRows($batch);
+        }
+
         if (empty($previewRows)) {
             throw ValidationException::withMessages([
                 'batch' => 'Onizleme verisi bulunamadi. Lutfen dosyayi tekrar yukleyin.',
@@ -195,6 +203,18 @@ class QuestionImportService
             'manual_review' => $manualReview,
             'skipped' => $skipped,
         ];
+    }
+
+    private function loadPreviewRows(QuestionImportBatch $batch): array
+    {
+        return $batch->rows()
+            ->get()
+            ->map(function (QuestionImportRow $row) {
+                return array_merge(
+                    ['question_hash' => $row->question_hash],
+                    $row->payload_json ?? []
+                );
+            })->all();
     }
 
     private function parseCsv(UploadedFile $file): array

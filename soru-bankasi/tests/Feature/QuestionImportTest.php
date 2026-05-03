@@ -7,6 +7,7 @@ use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class QuestionImportTest extends TestCase
@@ -41,6 +42,21 @@ class QuestionImportTest extends TestCase
         $batchId = \App\Models\QuestionImportBatch::query()->value('id');
         $rowId = \App\Models\QuestionImportRow::query()->value('id');
 
+        $row = \App\Models\QuestionImportRow::query()->find($rowId);
+
+        $this->assertNotNull($row);
+        $this->assertIsArray($row->payload_json);
+        $this->assertEquals('2+2 kactir?', $row->payload_json['question_text']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.imports.show', $batchId))
+            ->assertOk()
+            ->assertSee('Önizleme Satırları', false)
+            ->assertSee('2+2 kactir?', false)
+            ->assertSee('Soru (dosyadan)', false);
+
+        Cache::forget('import.preview.'.$batchId);
+
         $confirmResponse = $this->actingAs($admin)->post(route('admin.imports.confirm', $batchId), [
             'actions' => [
                 $rowId => 'insert',
@@ -53,6 +69,13 @@ class QuestionImportTest extends TestCase
             'source_type' => 'import',
             'status' => 'active',
         ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.imports.show', $batchId))
+            ->assertOk()
+            ->assertSee('İşlenen satırlar', false)
+            ->assertSee('2+2 kactir?', false)
+            ->assertSee('inserted', false);
     }
 
     private function createAdmin(): User

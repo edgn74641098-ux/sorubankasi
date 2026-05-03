@@ -163,17 +163,12 @@ class TestGenerationService
             $threshold = Carbon::now()->subHours($cooldown);
 
             $selected = $this->baseSubjectQuestionQuery($subject)
-                ->whereIn('questions.id', function ($query) use ($user, $threshold) {
-                    $query->select('question_id')
-                        ->from('user_wrong_question_stats')
-                        ->where('user_id', $user->id)
-                        ->where(function ($cooldownQuery) use ($threshold) {
-                            $cooldownQuery
-                                ->whereNull('last_wrong_at')
-                                ->orWhere('last_wrong_at', '<=', $threshold);
-                        });
-                })
-                ->inRandomOrder()
+                ->select('questions.*')
+                ->join('user_wrong_question_stats', 'questions.id', '=', 'user_wrong_question_stats.question_id')
+                ->where('user_wrong_question_stats.user_id', $user->id)
+                ->where('user_wrong_question_stats.last_wrong_at', '<=', $threshold)
+                ->orderByDesc('user_wrong_question_stats.wrong_count')
+                ->orderByDesc('user_wrong_question_stats.last_wrong_at')
                 ->limit(self::QUESTION_COUNT)
                 ->get();
 

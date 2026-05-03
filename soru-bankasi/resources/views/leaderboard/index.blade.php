@@ -13,13 +13,19 @@
                     @if($globalSnapshotAt)
                         Son guncelleme: {{ \Illuminate\Support\Carbon::parse($globalSnapshotAt)->format('d.m.Y H:i') }}
                     @else
-                        Henuz snapshot uretilmemis.
+                        Henuz siralama hesaplanmamis. Tamamladiginiz bir testten sonra liste otomatik guncellenir; yine de bos kalirsa <code class="user-select-all">php artisan leaderboard:snapshot</code> calistirin veya zamanlayiciyi acin.
                     @endif
+                </p>
+                <p class="text-muted small mb-3">
+                    Siralamaya girmek icin son {{ $leaderboardWindowDays }} gunde, her biri 20 soruluk ve tamamlanmis en az <strong>{{ $leaderboardMinTests }}</strong> testiniz olmalidir (puanlar bu testlerin toplamidir). Tek tek soru cozmek veya yeterli sayida tamamlanmis test olmamasi listeye cikmanizi engeller.
                 </p>
 
                 @if($myGlobalRank)
                     <div class="alert alert-info">
-                        Senin global siran: <strong>#{{ $myGlobalRank->rank }}</strong> ({{ $myGlobalRank->score }} puan)
+                        Senin global siran: <strong>#{{ $myGlobalRank->rank }}</strong> ({{ $myGlobalRank->score }} puan).
+                        Siralamaya giren testlerde toplam <strong>{{ $myGlobalRank->questions_total }}</strong> soru,
+                        <strong>{{ $myGlobalRank->correct_total }}</strong> dogru,
+                        <strong>{{ $myGlobalRank->wrong_total }}</strong> yanlis.
                     </div>
                 @endif
 
@@ -30,6 +36,9 @@
                                 <th>Sira</th>
                                 <th>Kullanici</th>
                                 <th>Puan</th>
+                                <th class="text-end">Cozulen soru</th>
+                                <th class="text-end">Dogru</th>
+                                <th class="text-end">Yanlis</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -38,10 +47,15 @@
                                     <td>#{{ $row->rank }}</td>
                                     <td>{{ $row->user?->name ?? 'Kullanici' }}</td>
                                     <td>{{ $row->score }}</td>
+                                    <td class="text-end">{{ $row->questions_total }}</td>
+                                    <td class="text-end">{{ $row->correct_total }}</td>
+                                    <td class="text-end">{{ $row->wrong_total }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="3" class="text-muted">Gosterilecek global veri yok.</td>
+                                    <td colspan="6" class="text-muted">
+                                        Gosterilecek kayit yok. En az {{ $leaderboardMinTests }} tamamlanmis (20 soruluk) test sartini saglayan kullanici yoksa tablo bos kalir; admin ayarindan bu esigi dusurebilirsiniz.
+                                    </td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -69,13 +83,37 @@
                     @if($subjectSnapshotAt)
                         Son guncelleme: {{ \Illuminate\Support\Carbon::parse($subjectSnapshotAt)->format('d.m.Y H:i') }}
                     @else
-                        Secili ders icin henuz snapshot yok.
+                        Bu ders icin henuz siralama yok. Test bitince otomatik hesaplanir; gerekiyorsa <code class="user-select-all">php artisan leaderboard:snapshot</code> calistirin.
                     @endif
                 </p>
 
                 @if($mySubjectRank)
                     <div class="alert alert-info">
-                        Secili derste siran: <strong>#{{ $mySubjectRank->rank }}</strong> ({{ $mySubjectRank->score }} puan)
+                        Secili derste siran: <strong>#{{ $mySubjectRank->rank }}</strong> ({{ $mySubjectRank->score }} puan).
+                        Bu derste siralamaya giren testlerde toplam <strong>{{ $mySubjectRank->questions_total }}</strong> soru,
+                        <strong>{{ $mySubjectRank->correct_total }}</strong> dogru,
+                        <strong>{{ $mySubjectRank->wrong_total }}</strong> yanlis.
+                    </div>
+                @endif
+
+                @if($selectedSubjectId)
+                    <div class="mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                        <div class="text-muted small">
+                            Bu derste en çok yanlış verdiğin soru kaydı: <strong>{{ $wrongQuestionCount }}</strong>.
+                            @if($wrongQuestionCount === 0)
+                                Takıldıklarım testini başlatmak için önce bazı soruları yanlış yanıtlamanız gerekiyor.
+                            @endif
+                        </div>
+                        @if($wrongQuestionCount > 0)
+                            <a href="{{ route('tests.create', ['subject_id' => $selectedSubjectId, 'mode' => 'WEAKNESSES']) }}"
+                               class="btn btn-primary">
+                                Takıldıklarım Testi Başlat
+                            </a>
+                        @else
+                            <span class="btn btn-primary disabled" tabindex="-1" aria-disabled="true">
+                                Takıldıklarım Testi Başlat
+                            </span>
+                        @endif
                     </div>
                 @endif
 
@@ -86,6 +124,9 @@
                                 <th>Sira</th>
                                 <th>Kullanici</th>
                                 <th>Puan</th>
+                                <th class="text-end">Cozulen soru</th>
+                                <th class="text-end">Dogru</th>
+                                <th class="text-end">Yanlis</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -94,10 +135,15 @@
                                     <td>#{{ $row->rank }}</td>
                                     <td>{{ $row->user?->name ?? 'Kullanici' }}</td>
                                     <td>{{ $row->score }}</td>
+                                    <td class="text-end">{{ $row->questions_total }}</td>
+                                    <td class="text-end">{{ $row->correct_total }}</td>
+                                    <td class="text-end">{{ $row->wrong_total }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="3" class="text-muted">Gosterilecek ders verisi yok.</td>
+                                    <td colspan="6" class="text-muted">
+                                        Bu derste siralama icin son {{ $leaderboardWindowDays }} gunde en az {{ $leaderboardMinTests }} tamamlanmis test sartini saglayan kullanici yok.
+                                    </td>
                                 </tr>
                             @endforelse
                         </tbody>

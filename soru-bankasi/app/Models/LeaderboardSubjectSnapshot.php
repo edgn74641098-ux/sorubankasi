@@ -14,6 +14,9 @@ class LeaderboardSubjectSnapshot extends Model
         'user_id',
         'subject_id',
         'score',
+        'questions_total',
+        'correct_total',
+        'wrong_total',
         'rank',
         'snapshot_at',
     ];

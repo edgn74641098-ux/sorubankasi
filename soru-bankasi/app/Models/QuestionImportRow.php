@@ -15,6 +15,11 @@ class QuestionImportRow extends Model
         'question_hash',
         'action',
         'matched_question_id',
+        'payload_json',
+    ];
+
+    protected $casts = [
+        'payload_json' => 'array',
     ];
 
     public function batch(): BelongsTo

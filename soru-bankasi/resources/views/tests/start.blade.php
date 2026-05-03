@@ -43,6 +43,7 @@
                                 </select>
                             </div>
 
+                            @php $selectedMode = old('mode', request('mode', 'RANDOM')); @endphp
                             <div class="col-12">
                                 <div class="form-label">Mod</div>
                                 <div class="row g-3">
@@ -53,7 +54,7 @@
                                     ] as $value => [$label, $description])
                                         <div class="col-md-4">
                                             <label class="sb-option-card h-100">
-                                                <input type="radio" name="mode" value="{{ $value }}" class="form-check-input me-2" @checked(old('mode', 'RANDOM') === $value)>
+                                                <input type="radio" name="mode" value="{{ $value }}" class="form-check-input me-2" @checked($selectedMode === $value)>
                                                 <span class="fw-semibold">{{ $label }}</span>
                                                 <span class="d-block text-muted small mt-1">{{ $description }}</span>
                                             </label>
@@ -62,15 +63,19 @@
                                 </div>
                             </div>
 
-                            <div class="col-md-6">
-                                <label for="min_difficulty" class="form-label">Minimum zorluk</label>
-                                <input type="range" id="min_difficulty" name="min_difficulty" min="1" max="10" value="{{ old('min_difficulty', 3) }}" class="form-range">
-                                <div class="text-muted small">Secim: <span id="minDifficultyValue">{{ old('min_difficulty', 3) }}</span></div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="max_difficulty" class="form-label">Maksimum zorluk</label>
-                                <input type="range" id="max_difficulty" name="max_difficulty" min="1" max="10" value="{{ old('max_difficulty', 7) }}" class="form-range">
-                                <div class="text-muted small">Secim: <span id="maxDifficultyValue">{{ old('max_difficulty', 7) }}</span></div>
+                            <div class="col-12 js-difficulty-range-block {{ $selectedMode === 'DIFFICULTY_RANGE' ? '' : 'd-none' }}">
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <label for="min_difficulty" class="form-label">Minimum zorluk</label>
+                                        <input type="range" id="min_difficulty" name="min_difficulty" min="1" max="10" value="{{ old('min_difficulty', 3) }}" class="form-range">
+                                        <div class="text-muted small">Secim: <span id="minDifficultyValue">{{ old('min_difficulty', 3) }}</span></div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="max_difficulty" class="form-label">Maksimum zorluk</label>
+                                        <input type="range" id="max_difficulty" name="max_difficulty" min="1" max="10" value="{{ old('max_difficulty', 7) }}" class="form-range">
+                                        <div class="text-muted small">Secim: <span id="maxDifficultyValue">{{ old('max_difficulty', 7) }}</span></div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-12 d-flex justify-content-end">
@@ -88,6 +93,19 @@
         const maxSlider = document.getElementById('max_difficulty');
         const minOutput = document.getElementById('minDifficultyValue');
         const maxOutput = document.getElementById('maxDifficultyValue');
+        const difficultyBlock = document.querySelector('.js-difficulty-range-block');
+        const modeInputs = document.querySelectorAll('input[name="mode"]');
+
+        const syncDifficultyVisibility = () => {
+            const selected = document.querySelector('input[name="mode"]:checked');
+            if (! difficultyBlock || ! selected) {
+                return;
+            }
+            difficultyBlock.classList.toggle('d-none', selected.value !== 'DIFFICULTY_RANGE');
+        };
+
+        modeInputs.forEach((input) => input.addEventListener('change', syncDifficultyVisibility));
+        syncDifficultyVisibility();
 
         if (minSlider && maxSlider) {
             const syncValues = () => {
