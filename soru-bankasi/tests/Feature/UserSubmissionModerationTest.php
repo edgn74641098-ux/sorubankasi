@@ -43,6 +43,24 @@ class UserSubmissionModerationTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_view_modern_pending_submissions_page(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+        $subject = Subject::factory()->create(['name' => 'Adli Bilisim', 'is_active' => true]);
+        $this->createPendingSubmission($user, $subject);
+
+        $this->actingAs($admin)
+            ->get(route('admin.submissions.pending'))
+            ->assertOk()
+            ->assertSee('Moderasyon Kuyrugu')
+            ->assertSee('Bekleyen Oneriler')
+            ->assertSee('Kullanici tarafindan onerilen soru metni')
+            ->assertSee('Dogru cevap')
+            ->assertSee('Onayla')
+            ->assertSee('Reddet');
+    }
+
     public function test_admin_can_revoke_approved_submission_reward_and_deactivate_question(): void
     {
         $admin = $this->createUserWithRole('admin');

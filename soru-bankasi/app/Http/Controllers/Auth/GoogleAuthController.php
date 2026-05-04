@@ -20,6 +20,12 @@ class GoogleAuthController extends Controller
 
     public function redirect(): RedirectResponse
     {
+        if (! $this->settings->getBool('google_auth_enabled', true)) {
+            return redirect()
+                ->route('login')
+                ->with('status', 'Google ile giris su anda kapali.');
+        }
+
         if (! $this->googleConfigured()) {
             return redirect()
                 ->route('login')
@@ -33,13 +39,13 @@ class GoogleAuthController extends Controller
 
     public function callback(): RedirectResponse
     {
+        abort_unless($this->settings->getBool('google_auth_enabled', true), 403);
+
         if (! $this->googleConfigured()) {
             return redirect()
                 ->route('login')
                 ->with('status', 'Google ile giris henuz yapilandirilmadi.');
         }
-
-        abort_unless($this->settings->getBool('registration_open', true), 403);
 
         $googleUser = Socialite::driver('google')->user();
         $email = strtolower((string) $googleUser->getEmail());
@@ -71,6 +77,11 @@ class GoogleAuthController extends Controller
                 'total_score' => 0,
             ]);
         }
+
+        abort_if(! $user->is_active, 403, $this->settings->getString(
+            'inactive_login_message',
+            'Kullanici hesabiniz pasif duruma getirilmistir. Lutfen yonetici ile iletisime gecin.'
+        ));
 
         Auth::login($user, true);
         request()->session()->regenerate();

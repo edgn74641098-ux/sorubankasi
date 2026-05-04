@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\DB;
 class QuestionReportReviewService
 {
     public function __construct(
-        private readonly AuditLogService $auditLog
+        private readonly AuditLogService $auditLog,
+        private readonly SettingsService $settingsService
     ) {
     }
 
@@ -121,11 +122,17 @@ class QuestionReportReviewService
 
     private function acceptedMessage(QuestionReport $report, ?string $oldCorrectOption): string
     {
-        if ($report->suggested_correct_option) {
-            return "Itiraziniz kabul edildi. Katkiniz icin tesekkur ederiz. Sorunun dogru cevabi {$oldCorrectOption} yerine {$report->suggested_correct_option} olarak guncellendi.";
-        }
+        $newCorrectOption = $report->suggested_correct_option ?: $oldCorrectOption;
+        $template = $this->settingsService->getString(
+            'question_report_accept_message',
+            'Itiraziniz kabul edildi. Katkiniz icin tesekkur ederiz. Sorunun dogru cevabi {old_answer} yerine {new_answer} olarak guncellendi.'
+        );
 
-        return 'Itiraziniz kabul edildi. Katkiniz ve dikkatiniz icin tesekkur ederiz.';
+        return strtr($template, [
+            '{old_answer}' => (string) ($oldCorrectOption ?? '-'),
+            '{new_answer}' => (string) ($newCorrectOption ?? '-'),
+            '{question_id}' => (string) $report->question_id,
+        ]);
     }
 
     private function notifyAccepted(QuestionReport $report, ?string $oldCorrectOption): void

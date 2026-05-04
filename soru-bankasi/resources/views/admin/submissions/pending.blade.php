@@ -1,226 +1,164 @@
-@extends('layouts.admin', ['pageTitle' => 'Soru Moderasyon', 'title' => 'Soru Moderasyon'])
+@extends('layouts.admin', ['pageTitle' => 'Soru Onerileri', 'title' => 'Soru Onerileri'])
 
 @section('content')
-<div class="container-fluid py-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h3 class="mb-0">
-                        <i class="bi bi-clipboard-check"></i> Soru Moderasyon Paneli
-                    </h3>
-                    <small>Bekleyen kullanıcı soru önerilerini inceleyin ve onaylayın/reddedin</small>
-                </div>
+    <section class="admin-command-hero">
+        <div>
+            <p class="eyebrow">Moderasyon Kuyrugu</p>
+            <h1>Soru onerileri</h1>
+            <p>Kullanicilarin gonderdigi sorulari, cevap anahtarini ve aciklamayi tek akista inceleyin.</p>
+        </div>
+        <div class="admin-command-score">
+            <span>Bekleyen Oneri</span>
+            <strong>{{ number_format($submissions->total()) }}</strong>
+            <small>onay veya ret bekliyor</small>
+        </div>
+    </section>
 
-                <div class="card-body">
-                    @if ($submissions->count() === 0)
-                        <div class="alert alert-info" role="alert">
-                            <i class="bi bi-info-circle"></i>
-                            Incelenecek soru bulunmamaktadır.
-                        </div>
-                    @else
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <p class="text-muted">
-                                    <strong>Toplam Bekleyen Sorular:</strong> {{ $submissions->total() }}
-                                </p>
-                            </div>
-                        </div>
+    @if (session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
 
-                        @foreach ($submissions as $submission)
-                            <div class="card mb-4 sb-review-card">
-                                <div class="card-header bg-light">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-6">
-                                            <h5 class="mb-0">
-                                                {{ $submission->subject->name }}
-                                                <span class="badge bg-warning text-dark ms-2">
-                                                    Beklemede
-                                                </span>
-                                            </h5>
-                                            <small class="text-muted">
-                                                Gönderen: <strong>{{ $submission->user->name }}</strong> 
-                                                ({{ $submission->user->email }})
-                                            </small>
-                                        </div>
-                                        <div class="col-md-6 text-end">
-                                            <small class="text-muted">
-                                                {{ $submission->created_at->format('d.m.Y H:i') }}
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
+    @if ($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
 
-                                <div class="card-body">
-                                    {{-- Question Text --}}
-                                    <div class="mb-4">
-                                        <h6 class="text-uppercase text-muted">
-                                            <i class="bi bi-question-circle"></i> Soru Metni
-                                        </h6>
-                                        <div class="bg-light p-3 rounded">
-                                            <p class="mb-0">{{ $submission->payload_json['question_text'] }}</p>
-                                        </div>
-                                    </div>
-
-                                    {{-- Options --}}
-                                    <div class="mb-4">
-                                        <h6 class="text-uppercase text-muted">
-                                            <i class="bi bi-list-check"></i> Cevap Şıkları
-                                        </h6>
-                                        <div class="row">
-                                            @foreach (['A', 'B', 'C', 'D', 'E'] as $option)
-                                                <div class="col-md-6 mb-2">
-                                                    <div class="p-2 border rounded">
-                                                        <strong class="text-primary">{{ $option }}:</strong>
-                                                        {{ $submission->payload_json['options'][$option] }}
-                                                        @if ($submission->payload_json['correct_option'] === $option)
-                                                            <span class="badge bg-success float-end">
-                                                                ✓ Doğru Cevap
-                                                            </span>
-                                                        @endif
-                                                    </div>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
-
-                                    {{-- Explanation --}}
-                                    <div class="mb-4">
-                                        <h6 class="text-uppercase text-muted">
-                                            <i class="bi bi-lightbulb"></i> Açıklama
-                                        </h6>
-                                        <div class="bg-light p-3 rounded">
-                                            <p class="mb-0">{{ $submission->payload_json['explanation_text'] }}</p>
-                                        </div>
-                                    </div>
-
-                                    {{-- Action Buttons --}}
-                                    <div class="mt-4">
-                                        <div class="row">
-                                            <div class="col-md-6 mb-2">
-                                                <button class="btn btn-success btn-block w-100" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#approveModal{{ $submission->id }}">
-                                                    <i class="bi bi-check-circle"></i> Onayla
-                                                </button>
-                                            </div>
-                                            <div class="col-md-6 mb-2">
-                                                <button class="btn btn-danger btn-block w-100" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#rejectModal{{ $submission->id }}">
-                                                    <i class="bi bi-x-circle"></i> Reddet
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Approve Modal --}}
-                            <div class="modal fade" id="approveModal{{ $submission->id }}" 
-                                 tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Soruyu Onayla</h5>
-                                            <button type="button" class="btn-close" 
-                                                    data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form action="{{ route('admin.submissions.approve', $submission) }}" 
-                                              method="POST">
-                                            @csrf
-                                            <div class="modal-body">
-                                                <div class="alert alert-success" role="alert">
-                                                    <i class="bi bi-info-circle"></i>
-                                                    Bu soru onaylanırsa, kullanıcıya <strong>+10 puan</strong> 
-                                                    verilecektir.
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label for="review_note{{ $submission->id }}" 
-                                                           class="form-label">
-                                                        Notlar (Opsiyonel)
-                                                    </label>
-                                                    <textarea class="form-control" 
-                                                              id="review_note{{ $submission->id }}" 
-                                                              name="review_note" rows="3" 
-                                                              placeholder="Onaylama hakkında not ekleyin (örn: Açıklama iyileştirilebilir ama kabul edilebilir)">
-                                                    </textarea>
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" 
-                                                        data-bs-dismiss="modal">
-                                                    İptal
-                                                </button>
-                                                <button type="submit" class="btn btn-success">
-                                                    <i class="bi bi-check-circle"></i> Onayla
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Reject Modal --}}
-                            <div class="modal fade" id="rejectModal{{ $submission->id }}" 
-                                 tabindex="-1" aria-hidden="true">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Soruyu Reddet</h5>
-                                            <button type="button" class="btn-close" 
-                                                    data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form action="{{ route('admin.submissions.reject', $submission) }}" 
-                                              method="POST">
-                                            @csrf
-                                            <div class="modal-body">
-                                                <div class="alert alert-danger" role="alert">
-                                                    <i class="bi bi-exclamation-triangle"></i>
-                                                    <strong>Uyarı:</strong> Reddetme sebebini açıkça yazmalısınız. 
-                                                    Kullanıcı bu notları görecektir.
-                                                </div>
-
-                                                <div class="mb-3">
-                                                    <label for="review_note{{ $submission->id }}_reject" 
-                                                           class="form-label">
-                                                        <strong>Ret Sebebi (Zorunlu)</strong>
-                                                    </label>
-                                                    <textarea class="form-control @error('review_note') is-invalid @enderror" 
-                                                              id="review_note{{ $submission->id }}_reject" 
-                                                              name="review_note" rows="3" 
-                                                              placeholder="Soruyu neden reddetiyorsunuz? (Örn: Yazım hatası var, şıklar açık değil, vb.)"
-                                                              required>
-                                                    </textarea>
-                                                    @error('review_note')
-                                                        <div class="invalid-feedback">{{ $message }}</div>
-                                                    @enderror
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" 
-                                                        data-bs-dismiss="modal">
-                                                    İptal
-                                                </button>
-                                                <button type="submit" class="btn btn-danger">
-                                                    <i class="bi bi-x-circle"></i> Reddet
-                                                </button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-
-                        {{-- Pagination --}}
-                        <nav aria-label="Sayfa Numarası" class="mt-4">
-                            {{ $submissions->links() }}
-                        </nav>
-                    @endif
-                </div>
+    <section class="admin-panel">
+        <div class="admin-panel__head">
+            <div>
+                <h2>Bekleyen Oneriler</h2>
+                <p>Soru metni, siklar ve kullanici bilgisini kontrol ederek yayina alin.</p>
             </div>
         </div>
-    </div>
-</div>
+
+        <div class="admin-panel__content">
+            @if ($submissions->isEmpty())
+                <div class="alert alert-info mb-0">Incelenecek soru onerisi bulunmuyor.</div>
+            @else
+                <div class="vstack gap-3">
+                    @foreach ($submissions as $submission)
+                        @php
+                            $payload = $submission->payload_json;
+                            $correctOption = $payload['correct_option'] ?? null;
+                        @endphp
+
+                        <article class="card border-0 shadow-sm">
+                            <div class="card-header bg-white">
+                                <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                                    <div>
+                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                            <span class="badge text-bg-primary">{{ $submission->subject?->name ?? 'Ders yok' }}</span>
+                                            <span class="badge text-bg-warning">Beklemede</span>
+                                            <span class="badge text-bg-success">Dogru: {{ $correctOption ?? '-' }}</span>
+                                        </div>
+                                        <div class="small text-muted mt-2">
+                                            Gonderen: <strong>{{ $submission->user?->name }}</strong>
+                                            ({{ $submission->user?->email }}) · {{ $submission->created_at->format('d.m.Y H:i') }}
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-start gap-2">
+                                        <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#approveModal{{ $submission->id }}">
+                                            <i class="bi bi-check-circle me-1"></i> Onayla
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#rejectModal{{ $submission->id }}">
+                                            <i class="bi bi-x-circle me-1"></i> Reddet
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-body">
+                                <div class="mb-4">
+                                    <div class="text-muted small text-uppercase fw-semibold mb-2">Soru Metni</div>
+                                    <div class="bg-light rounded p-3 fw-semibold">{{ $payload['question_text'] ?? '-' }}</div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <div class="text-muted small text-uppercase fw-semibold mb-2">Cevap Sıkları</div>
+                                    <div class="row g-2">
+                                        @foreach (['A', 'B', 'C', 'D', 'E'] as $option)
+                                            @php($isCorrect = $correctOption === $option)
+                                            <div class="col-lg-6">
+                                                <div class="border rounded p-2 small {{ $isCorrect ? 'bg-success-subtle border-success text-success-emphasis' : 'bg-white' }}">
+                                                    <span class="fw-bold">{{ $option }}.</span>
+                                                    {{ $payload['options'][$option] ?? '-' }}
+                                                    @if($isCorrect)
+                                                        <span class="badge text-bg-success ms-2">Dogru cevap</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="text-muted small text-uppercase fw-semibold mb-2">Aciklama</div>
+                                    <div class="border rounded p-3 bg-white">{{ $payload['explanation_text'] ?? '-' }}</div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <div class="modal fade" id="approveModal{{ $submission->id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form action="{{ route('admin.submissions.approve', $submission) }}" method="POST">
+                                        @csrf
+                                        <div class="modal-header">
+                                            <h2 class="modal-title h5">Soruyu Onayla</h2>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="alert alert-success">
+                                                Onaylanirsa soru aktif havuza eklenir ve kullaniciya <strong>+{{ number_format($approvalReward) }} puan</strong> verilir.
+                                            </div>
+                                            <label for="approve_note_{{ $submission->id }}" class="form-label">Onay notu</label>
+                                            <textarea id="approve_note_{{ $submission->id }}" name="review_note" rows="3" maxlength="500" class="form-control"></textarea>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                                            <button type="submit" class="btn btn-success">Onayla</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal fade" id="rejectModal{{ $submission->id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form action="{{ route('admin.submissions.reject', $submission) }}" method="POST">
+                                        @csrf
+                                        <div class="modal-header">
+                                            <h2 class="modal-title h5">Soruyu Reddet</h2>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="alert alert-warning">
+                                                Ret sebebi kullanici tarafindan gorulecegi icin net ve yapici yazin.
+                                            </div>
+                                            <label for="reject_note_{{ $submission->id }}" class="form-label">Ret sebebi</label>
+                                            <textarea id="reject_note_{{ $submission->id }}" name="review_note" rows="3" maxlength="500" class="form-control @error('review_note') is-invalid @enderror" @if($rejectionNoteRequired) required @endif></textarea>
+                                            @unless($rejectionNoteRequired)
+                                                <div class="form-text">Bu sistem ayarlarinda ret notu opsiyonel.</div>
+                                            @endunless
+                                            @error('review_note')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                                            <button type="submit" class="btn btn-outline-danger">Reddet</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+
+                <div class="mt-4">
+                    {{ $submissions->links('pagination::bootstrap-5') }}
+                </div>
+            @endif
+        </div>
+    </section>
 @endsection

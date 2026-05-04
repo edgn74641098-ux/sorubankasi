@@ -13,10 +13,6 @@ use Illuminate\Support\Facades\DB;
 
 class LeaderboardController extends Controller
 {
-    private const GLOBAL_PAGE_LIMIT = 20;
-
-    private const HIGHLIGHT_PAGE_LIMIT = 5;
-
     public function __construct(
         private readonly SettingsService $settingsService
     ) {
@@ -38,7 +34,7 @@ class LeaderboardController extends Controller
                 ->with('user:id,name')
                 ->where('snapshot_at', $globalSnapshotAt)
                 ->orderBy('rank')
-                ->limit(self::GLOBAL_PAGE_LIMIT)
+                ->limit($this->globalLimit())
                 ->get();
 
             $myGlobalRank = LeaderboardGlobalSnapshot::query()
@@ -129,12 +125,12 @@ class LeaderboardController extends Controller
             'wrongQuestionCount' => $wrongQuestionCount,
             'leaderboardMinTests' => $leaderboardMinTests,
             'leaderboardWindowDays' => 30,
-            'weeklyLeaders' => $this->weeklyLeaders(),
-            'mostImprovedRows' => $this->mostImprovedRows(),
+            'weeklyLeaders' => $this->weeklyLeaders($this->weeklyLimit()),
+            'mostImprovedRows' => $this->mostImprovedRows($this->formLimit()),
         ]);
     }
 
-    private function weeklyLeaders()
+    private function weeklyLeaders(int $limit)
     {
         return DB::table('tests')
             ->join('users', 'users.id', '=', 'tests.user_id')
@@ -143,11 +139,11 @@ class LeaderboardController extends Controller
             ->where('tests.ended_at', '>=', now()->subDays(7))
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('score_total')
-            ->limit(self::HIGHLIGHT_PAGE_LIMIT)
+            ->limit($limit)
             ->get();
     }
 
-    private function mostImprovedRows()
+    private function mostImprovedRows(int $limit)
     {
         return DB::table('tests')
             ->join('users', 'users.id', '=', 'tests.user_id')
@@ -157,7 +153,7 @@ class LeaderboardController extends Controller
             ->groupBy('users.id', 'users.name')
             ->having('test_count', '>=', 2)
             ->orderByDesc('average_score')
-            ->limit(self::HIGHLIGHT_PAGE_LIMIT)
+            ->limit($limit)
             ->get();
     }
 
@@ -186,7 +182,7 @@ class LeaderboardController extends Controller
             ->with('user:id,name')
             ->where('snapshot_at', $snapshotAt)
             ->orderBy('rank')
-            ->limit(100)
+            ->limit($this->globalLimit())
             ->get()
             ->map(fn (LeaderboardGlobalSnapshot $row) => [
                 'rank' => $row->rank,
@@ -242,7 +238,7 @@ class LeaderboardController extends Controller
             ->where('subject_id', $subject->id)
             ->where('snapshot_at', $snapshotAt)
             ->orderBy('rank')
-            ->limit(100)
+            ->limit($this->globalLimit())
             ->get()
             ->map(fn (LeaderboardSubjectSnapshot $row) => [
                 'rank' => $row->rank,
@@ -276,5 +272,20 @@ class LeaderboardController extends Controller
                 'wrong_total' => (int) $myRank->wrong_total,
             ] : null,
         ]);
+    }
+
+    private function globalLimit(): int
+    {
+        return max(1, min(100, $this->settingsService->getInt('leaderboard_global_limit', 20)));
+    }
+
+    private function weeklyLimit(): int
+    {
+        return max(1, min(50, $this->settingsService->getInt('leaderboard_weekly_limit', 5)));
+    }
+
+    private function formLimit(): int
+    {
+        return max(1, min(50, $this->settingsService->getInt('leaderboard_form_limit', 5)));
     }
 }

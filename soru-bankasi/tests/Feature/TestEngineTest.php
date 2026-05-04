@@ -108,7 +108,30 @@ class TestEngineTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->seedQuestions($subject, $user, 20);
+        $questions = $this->seedQuestions($subject, $user, 20);
+
+        UserWrongQuestionStat::query()->create([
+            'user_id' => $user->id,
+            'question_id' => $questions->first()->id,
+            'wrong_count' => 1,
+            'last_wrong_at' => now()->subDay(),
+        ]);
+
+        Test::query()->create([
+            'user_id' => $user->id,
+            'subject_id' => $subject->id,
+            'question_count' => 20,
+            'duration_minutes' => 30,
+            'score' => 75,
+            'correct_count' => 15,
+            'wrong_count' => 5,
+            'blank_count' => 0,
+            'started_at' => now()->subHour(),
+            'ended_at' => now(),
+            'status' => 'finished',
+            'feedback_mode' => 'DELAYED_FEEDBACK',
+            'aborted' => false,
+        ]);
 
         $this->actingAs($user)
             ->get(route('subjects.index'))
@@ -118,7 +141,11 @@ class TestEngineTest extends TestCase
             ->assertSee('Test Ayarlari')
             ->assertSee('Rastgele')
             ->assertSee('Zorluk Araligi')
-            ->assertSee('Takildiklarim');
+            ->assertSee('Takildiklarim')
+            ->assertSeeText('1 takildigim soru')
+            ->assertSeeText('Basarim: %75.0')
+            ->assertSee('weakQuestionModeCount', false)
+            ->assertDontSee('20 soru, 1 takildigim');
     }
 
     public function test_old_start_test_route_redirects_to_subjects_page(): void

@@ -1,84 +1,93 @@
 @extends('layouts.admin', ['pageTitle' => 'Ayarlar', 'title' => 'Ayarlar'])
 
 @section('content')
-    <div class="mb-4">
-        <h1 class="h3 mb-1">Sistem Ayarlari</h1>
-        <p class="text-muted mb-0">Test davranisi, kayit, limit ve operasyon ayarlarini yonetin.</p>
-    </div>
-
-    <div class="card shadow-sm border-0">
-        <div class="card-body">
-            <form method="POST" action="{{ route('admin.settings.update') }}" class="row g-3">
-                @csrf
-                @method('PUT')
-
-                <div class="col-md-6">
-                    <label for="test_feedback_mode" class="form-label">{{ $settings['test_feedback_mode']['label'] }}</label>
-                    <select name="test_feedback_mode" id="test_feedback_mode" class="form-select" required>
-                        @foreach(['DELAYED_FEEDBACK' => 'Delayed feedback', 'INSTANT_FEEDBACK_LOCKED' => 'Instant feedback locked', 'NO_FEEDBACK' => 'No feedback'] as $value => $label)
-                            <option value="{{ $value }}" @selected(old('test_feedback_mode', $settings['test_feedback_mode']['value']) === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="registration_open" class="form-label">{{ $settings['registration_open']['label'] }}</label>
-                    <select name="registration_open" id="registration_open" class="form-select" required>
-                        <option value="1" @selected((bool) old('registration_open', $settings['registration_open']['value']) === true)>Acik</option>
-                        <option value="0" @selected((bool) old('registration_open', $settings['registration_open']['value']) === false)>Kapali</option>
-                    </select>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="maintenance_mode" class="form-label">{{ $settings['maintenance_mode']['label'] }}</label>
-                    <select name="maintenance_mode" id="maintenance_mode" class="form-select" required>
-                        <option value="0" @selected((bool) old('maintenance_mode', $settings['maintenance_mode']['value']) === false)>Kapali</option>
-                        <option value="1" @selected((bool) old('maintenance_mode', $settings['maintenance_mode']['value']) === true)>Acik</option>
-                    </select>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="daily_test_limit" class="form-label">{{ $settings['daily_test_limit']['label'] }}</label>
-                    <input type="number" min="1" max="100" name="daily_test_limit" id="daily_test_limit" class="form-control" value="{{ old('daily_test_limit', $settings['daily_test_limit']['value']) }}" required>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="daily_question_limit" class="form-label">{{ $settings['daily_question_limit']['label'] }}</label>
-                    <input type="number" min="1" max="100" name="daily_question_limit" id="daily_question_limit" class="form-control" value="{{ old('daily_question_limit', $settings['daily_question_limit']['value']) }}" required>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="login_rate_limit" class="form-label">{{ $settings['login_rate_limit']['label'] }}</label>
-                    <input type="number" min="1" max="20" name="login_rate_limit" id="login_rate_limit" class="form-control" value="{{ old('login_rate_limit', $settings['login_rate_limit']['value']) }}" required>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="login_lockout_duration" class="form-label">{{ $settings['login_lockout_duration']['label'] }}</label>
-                    <input type="number" min="60" max="86400" name="login_lockout_duration" id="login_lockout_duration" class="form-control" value="{{ old('login_lockout_duration', $settings['login_lockout_duration']['value']) }}" required>
-                </div>
-
-                <div class="col-md-3">
-                    <label for="minimum_leaderboard_tests" class="form-label">{{ $settings['minimum_leaderboard_tests']['label'] }}</label>
-                    <input type="number" min="1" max="20" name="minimum_leaderboard_tests" id="minimum_leaderboard_tests" class="form-control" value="{{ old('minimum_leaderboard_tests', $settings['minimum_leaderboard_tests']['value']) }}" required>
-                </div>
-
-                <div class="col-md-6">
-                    <label for="backup_mode" class="form-label">{{ $settings['backup_mode']['label'] }}</label>
-                    <select name="backup_mode" id="backup_mode" class="form-select" required>
-                        <option value="manual" @selected(old('backup_mode', $settings['backup_mode']['value']) === 'manual')>Manual</option>
-                        <option value="automatic" @selected(old('backup_mode', $settings['backup_mode']['value']) === 'automatic')>Automatic</option>
-                    </select>
-                </div>
-
-                <div class="col-md-6">
-                    <label for="current_password" class="form-label">Admin sifresi</label>
-                    <input type="password" name="current_password" id="current_password" class="form-control" autocomplete="current-password" required>
-                </div>
-
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary">Ayarlari Kaydet</button>
-                </div>
-            </form>
+    <section class="admin-command-hero">
+        <div>
+            <p class="eyebrow">Sistem Kontrol Merkezi</p>
+            <h1>Sistem ayarlari</h1>
+            <p>Kayit, giris, puanlama, leaderboard, itiraz, oneri ve arsiv davranislarini tek merkezden yonetin.</p>
         </div>
-    </div>
+        <div class="admin-command-score">
+            <span>Ayar Grubu</span>
+            <strong>{{ count($groups) }}</strong>
+            <small>aktif konfigurasyon alani</small>
+        </div>
+    </section>
+
+    @if (session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+
+    @if ($errors->any())
+        <div class="alert alert-danger">{{ $errors->first() }}</div>
+    @endif
+
+    <form method="POST" action="{{ route('admin.settings.update') }}">
+        @csrf
+        @method('PUT')
+
+        <div class="admin-settings-grid">
+            @foreach($groups as $groupKey => $settings)
+                <section class="admin-panel">
+                    <div class="admin-panel__head">
+                        <div>
+                            <h2>{{ $groupLabels[$groupKey] ?? $groupKey }}</h2>
+                            <p>Bu bolumdeki degisiklikler ilgili akislara aninda uygulanir.</p>
+                        </div>
+                    </div>
+                    <div class="admin-panel__content">
+                        <div class="row g-3">
+                            @foreach($settings as $key => $setting)
+                                @php($value = old($key, $setting['value']))
+                                <div class="{{ $setting['type'] === 'text' ? 'col-12' : 'col-md-6' }}">
+                                    <label for="{{ $key }}" class="form-label fw-semibold">{{ $setting['label'] }}</label>
+
+                                    @if($setting['type'] === 'boolean')
+                                        <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>
+                                            <option value="1" @selected((bool) $value === true)>Acik</option>
+                                            <option value="0" @selected((bool) $value === false)>Kapali</option>
+                                        </select>
+                                    @elseif($key === 'test_feedback_mode')
+                                        <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>
+                                            @foreach(['DELAYED_FEEDBACK' => 'Test sonunda goster', 'INSTANT_FEEDBACK_LOCKED' => 'Aninda goster ve kilitle', 'NO_FEEDBACK' => 'Feedback kapali'] as $optionValue => $label)
+                                                <option value="{{ $optionValue }}" @selected($value === $optionValue)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    @elseif($key === 'backup_mode')
+                                        <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>
+                                            <option value="manual" @selected($value === 'manual')>Manual</option>
+                                            <option value="automatic" @selected($value === 'automatic')>Automatic</option>
+                                        </select>
+                                    @elseif($setting['type'] === 'text')
+                                        <textarea name="{{ $key }}" id="{{ $key }}" rows="{{ $key === 'question_report_accept_message' ? 4 : 3 }}" maxlength="1000" class="form-control" required>{{ $value }}</textarea>
+                                        @if($key === 'question_report_accept_message')
+                                            <div class="form-text">Kullanilabilir alanlar: {old_answer}, {new_answer}, {question_id}</div>
+                                        @endif
+                                    @else
+                                        <input type="number" name="{{ $key }}" id="{{ $key }}" class="form-control" value="{{ $value }}" required>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </section>
+            @endforeach
+        </div>
+
+        <section class="admin-panel mt-4">
+            <div class="admin-panel__content">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-6">
+                        <label for="current_password" class="form-label fw-semibold">Admin sifresi</label>
+                        <input type="password" name="current_password" id="current_password" class="form-control" autocomplete="current-password" required>
+                    </div>
+                    <div class="col-lg-6 d-flex justify-content-lg-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Ayarlari Kaydet
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </form>
 @endsection

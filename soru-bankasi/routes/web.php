@@ -17,6 +17,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionReportController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\TestController;
 use App\Http\Controllers\UserSubmittedQuestionController;
@@ -78,6 +79,8 @@ Route::middleware(['auth', 'verified', 'role:admin,editor'])
         Route::middleware('role:admin')->group(function () {
             Route::get('users', [AdminUserController::class, 'index'])->name('users.index');
             Route::patch('users/{user}/role', [AdminUserController::class, 'updateRole'])->name('users.update-role');
+            Route::patch('users/{user}/status', [AdminUserController::class, 'updateStatus'])->name('users.update-status');
+            Route::delete('users/{user}', [AdminUserController::class, 'destroy'])->name('users.destroy');
 
             Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
             Route::put('settings', [SettingsController::class, 'update'])->middleware('reconfirm.password')->name('settings.update');
@@ -106,6 +109,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/tests/{test}/finish', [TestController::class, 'finish'])->name('tests.finish');
     Route::get('/tests/{test}/review', [TestController::class, 'review'])->name('tests.review');
     Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
+    Route::get('/search', SearchController::class)->name('search.index');
 
     // User submitted questions
     Route::get('/questions/submit', [UserSubmittedQuestionController::class, 'create'])->name('questions.create');

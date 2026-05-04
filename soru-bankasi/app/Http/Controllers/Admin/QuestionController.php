@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Question;
 use App\Models\QuestionVersion;
 use App\Models\Subject;
+use App\Services\SettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,10 @@ use Illuminate\View\View;
 
 class QuestionController extends Controller
 {
+    public function __construct(private readonly SettingsService $settingsService)
+    {
+    }
+
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Question::class);
@@ -136,7 +141,7 @@ class QuestionController extends Controller
                 'status' => $validated['status'],
                 'approved_at' => $statusMeta['approved_at'],
                 'archived_at' => $validated['status'] === 'archived' ? ($question->archived_at ?: now()) : null,
-                'purge_after' => $validated['status'] === 'archived' ? ($question->purge_after ?: now()->addDays(7)) : null,
+                'purge_after' => $validated['status'] === 'archived' ? ($question->purge_after ?: $this->purgeAfter(now())) : null,
                 'current_version' => $currentVersion + 1,
             ]);
         });
@@ -166,14 +171,32 @@ class QuestionController extends Controller
                 'approved_by' => null,
                 'approved_at' => null,
                 'archived_at' => now(),
-                'purge_after' => now()->addDays(7),
+                'purge_after' => $this->purgeAfter(now()),
                 'current_version' => $currentVersion + 1,
             ]);
         });
 
         return redirect()
             ->route('admin.archive.index')
-            ->with('success', 'Soru arsive tasindi. 7 gun sonra otomatik silme icin isaretlendi.');
+            ->with('success', $this->archiveMessage('Soru arsive tasindi.'));
+    }
+
+    private function purgeAfter($archiveAt)
+    {
+        if (! $this->settingsService->getBool('archive_auto_prune_enabled', true)) {
+            return null;
+        }
+
+        return $archiveAt->copy()->addDays($this->settingsService->getInt('archive_retention_days', 7));
+    }
+
+    private function archiveMessage(string $prefix): string
+    {
+        if (! $this->settingsService->getBool('archive_auto_prune_enabled', true)) {
+            return $prefix . ' Otomatik silme kapali.';
+        }
+
+        return $prefix . ' ' . $this->settingsService->getInt('archive_retention_days', 7) . ' gun sonra otomatik silme icin isaretlendi.';
     }
 
     private function availableSubjects()

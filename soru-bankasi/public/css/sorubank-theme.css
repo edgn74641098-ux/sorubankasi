@@ -524,6 +524,15 @@ a:hover {
     padding: 1.25rem;
 }
 
+.sb-report-details > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.sb-report-details > summary::-webkit-details-marker {
+    display: none;
+}
+
 .sb-option-card {
     border: 1px solid var(--sb-line);
     border-radius: var(--sb-radius);

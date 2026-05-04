@@ -7,6 +7,7 @@ use App\Models\Subject;
 use App\Models\UserSubmittedQuestion;
 use App\Services\AuditLogService;
 use App\Services\RateLimitingService;
+use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,12 +19,15 @@ class UserSubmittedQuestionController extends Controller
 {
     public function __construct(
         private readonly RateLimitingService $rateLimitingService,
-        private readonly AuditLogService $auditLog
+        private readonly AuditLogService $auditLog,
+        private readonly SettingsService $settingsService
     ) {
     }
 
     public function create(): View
     {
+        abort_unless($this->settingsService->getBool('user_submissions_enabled', true), 403);
+
         return view('questions.submit', [
             'subjects' => Subject::query()
                 ->where('is_active', true)
@@ -35,6 +39,12 @@ class UserSubmittedQuestionController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = Auth::user();
+
+        if (! $this->settingsService->getBool('user_submissions_enabled', true)) {
+            return back()->withErrors([
+                'submission' => 'Soru onerisi gonderimi su anda kapali.',
+            ]);
+        }
 
         if (! $this->rateLimitingService->canSubmitQuestion($user)) {
             return back()->withErrors([
@@ -96,6 +106,12 @@ class UserSubmittedQuestionController extends Controller
     {
         $user = $request->user();
 
+        if (! $this->settingsService->getBool('user_submissions_enabled', true)) {
+            return response()->json([
+                'message' => 'Soru onerisi gonderimi su anda kapali.',
+            ], 403);
+        }
+
         if (! $this->rateLimitingService->canSubmitQuestion($user)) {
             return response()->json([
                 'message' => "Bugun {$this->rateLimitingService->getDailyQuestionLimit()} soru limitine ulastiniz. Lutfen yarin deneyin.",
@@ -121,6 +137,8 @@ class UserSubmittedQuestionController extends Controller
                 ->where('status', 'pending')
                 ->latest('created_at')
                 ->paginate(15),
+            'approvalReward' => $this->settingsService->getInt('submission_approval_reward', 10),
+            'rejectionNoteRequired' => $this->settingsService->getBool('submission_rejection_note_required', true),
         ]);
     }
 
@@ -154,7 +172,8 @@ class UserSubmittedQuestionController extends Controller
                 'current_version' => 1,
             ]);
 
-            $submission->user->increment('total_score', 10);
+            $reward = $this->settingsService->getInt('submission_approval_reward', 10);
+            $submission->user->increment('total_score', $reward);
             $submission->update([
                 'status' => 'approved',
                 'approved_question_id' => $question->id,
@@ -169,21 +188,22 @@ class UserSubmittedQuestionController extends Controller
                 'user_submitted_questions',
                 $submission->id,
                 ['status' => 'pending'],
-                ['status' => 'approved', 'question_id' => $question->id, 'reward' => 10],
-                'Kullanici sorusu onaylandi ve +10 puan verildi.',
+                ['status' => 'approved', 'question_id' => $question->id, 'reward' => $reward],
+                "Kullanici sorusu onaylandi ve +{$reward} puan verildi.",
                 $request
             );
         });
 
-        return back()->with('success', 'Soru onaylandi. Kullaniciya +10 puan verildi.');
+        return back()->with('success', 'Soru onaylandi. Kullaniciya +' . $this->settingsService->getInt('submission_approval_reward', 10) . ' puan verildi.');
     }
 
     public function reject(Request $request, UserSubmittedQuestion $submission): RedirectResponse
     {
         $this->authorize('reviewSubmissions', $submission);
 
+        $noteRequired = $this->settingsService->getBool('submission_rejection_note_required', true);
         $validated = $request->validate([
-            'review_note' => ['required', 'string', 'min:10', 'max:500'],
+            'review_note' => [$noteRequired ? 'required' : 'nullable', 'string', 'min:10', 'max:500'],
         ]);
 
         if ($submission->status !== 'pending') {
@@ -194,7 +214,7 @@ class UserSubmittedQuestionController extends Controller
             'status' => 'rejected',
             'reviewed_by' => Auth::id(),
             'reviewed_at' => now(),
-            'review_note' => $validated['review_note'],
+            'review_note' => $validated['review_note'] ?? null,
         ]);
 
         $this->auditLog->record(
@@ -203,8 +223,8 @@ class UserSubmittedQuestionController extends Controller
             'user_submitted_questions',
             $submission->id,
             ['status' => 'pending'],
-            ['status' => 'rejected', 'review_note' => $validated['review_note']],
-            "Kullanici sorusu reddedildi. Sebep: {$validated['review_note']}",
+            ['status' => 'rejected', 'review_note' => $validated['review_note'] ?? null],
+            'Kullanici sorusu reddedildi.' . (filled($validated['review_note'] ?? null) ? " Sebep: {$validated['review_note']}" : ''),
             $request
         );
 
@@ -224,7 +244,8 @@ class UserSubmittedQuestionController extends Controller
         }
 
         DB::transaction(function () use ($request, $submission, $validated): void {
-            $submission->user->decrement('total_score', 10);
+            $reward = $this->settingsService->getInt('submission_approval_reward', 10);
+            $submission->user->decrement('total_score', $reward);
 
             if ($submission->approvedQuestion) {
                 $submission->approvedQuestion->update([
@@ -247,13 +268,13 @@ class UserSubmittedQuestionController extends Controller
                 'user_submitted_questions',
                 $submission->id,
                 ['status' => 'approved'],
-                ['status' => 'rejected', 'reason' => $validated['reason'], 'reward' => -10],
+                ['status' => 'rejected', 'reason' => $validated['reason'], 'reward' => -1 * $reward],
                 "Onaylanan soru geri alindi. Sebep: {$validated['reason']}",
                 $request
             );
         });
 
-        return back()->with('success', 'Soru onaylamasi geri alindi. Kullanicidan -10 puan kaldirildi.');
+        return back()->with('success', 'Soru onaylamasi geri alindi. Kullanicidan -' . $this->settingsService->getInt('submission_approval_reward', 10) . ' puan kaldirildi.');
     }
 
     private function sanitizeValidated(array $validated): array

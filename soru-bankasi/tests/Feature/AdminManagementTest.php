@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use App\Models\AuditLog;
 use App\Models\Question;
 use App\Models\QuestionVersion;
+use App\Models\QuestionReport;
 use App\Models\Role;
 use App\Models\Setting;
 use App\Models\Subject;
 use App\Models\Test;
 use App\Models\User;
+use App\Models\UserSubmittedQuestion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,11 +27,27 @@ class AdminManagementTest extends TestCase
         $this->actingAs($admin)->put(route('admin.settings.update'), [
             'test_feedback_mode' => 'NO_FEEDBACK',
             'registration_open' => '1',
+            'inactive_login_message' => 'Hesabiniz pasif duruma alinmistir.',
+            'email_verification_required' => '1',
+            'google_auth_enabled' => '1',
             'daily_test_limit' => '15',
             'daily_question_limit' => '12',
             'login_rate_limit' => '4',
             'login_lockout_duration' => '600',
             'minimum_leaderboard_tests' => '3',
+            'correct_answer_points' => '5',
+            'wrong_answer_penalty_enabled' => '0',
+            'wrong_answer_penalty_points' => '0',
+            'blank_answer_points' => '0',
+            'leaderboard_global_limit' => '20',
+            'leaderboard_weekly_limit' => '5',
+            'leaderboard_form_limit' => '5',
+            'question_report_accept_message' => 'Itiraziniz kabul edildi. {old_answer} -> {new_answer}',
+            'user_submissions_enabled' => '1',
+            'submission_approval_reward' => '10',
+            'submission_rejection_note_required' => '1',
+            'archive_retention_days' => '7',
+            'archive_auto_prune_enabled' => '1',
             'maintenance_mode' => '0',
             'backup_mode' => 'manual',
             'current_password' => 'password',
@@ -60,6 +78,156 @@ class AdminManagementTest extends TestCase
             'entity_type' => 'users',
             'entity_id' => $user->id,
         ]);
+    }
+
+    public function test_admin_users_page_shows_metrics_and_filters(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+        $subject = Subject::factory()->create(['is_active' => true]);
+
+        Test::query()->create([
+            'user_id' => $user->id,
+            'subject_id' => $subject->id,
+            'question_count' => 20,
+            'duration_minutes' => 30,
+            'score' => 80,
+            'correct_count' => 16,
+            'wrong_count' => 4,
+            'blank_count' => 0,
+            'started_at' => now()->subHour(),
+            'ended_at' => now(),
+            'status' => 'finished',
+            'feedback_mode' => 'DELAYED_FEEDBACK',
+            'aborted' => false,
+        ]);
+        UserSubmittedQuestion::query()->create([
+            'user_id' => $user->id,
+            'subject_id' => $subject->id,
+            'payload_json' => [
+                'question_text' => 'Kullanici oneri metni',
+                'options' => ['A' => 'A', 'B' => 'B', 'C' => 'C', 'D' => 'D', 'E' => 'E'],
+                'correct_option' => 'A',
+                'explanation_text' => 'Aciklama',
+            ],
+            'status' => 'approved',
+        ]);
+        QuestionReport::query()->create([
+            'user_id' => $user->id,
+            'question_id' => Question::factory()->create([
+                'subject_id' => $subject->id,
+                'created_by' => $admin->id,
+                'approved_by' => $admin->id,
+                'status' => 'active',
+                'approved_at' => now(),
+            ])->id,
+            'category' => 'WRONG_ANSWER',
+            'suggested_correct_option' => 'B',
+            'status' => 'approved',
+        ]);
+        foreach (['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4', '10.0.0.5', '10.0.0.6'] as $index => $ip) {
+            AuditLog::query()->create([
+                'actor_id' => $user->id,
+                'action' => 'auth.login',
+                'entity_type' => 'users',
+                'entity_id' => $user->id,
+                'reason' => 'Kullanici giris yapti.',
+                'ip_address' => $ip,
+                'created_at' => now()->subMinutes(6 - $index),
+                'updated_at' => now()->subMinutes(6 - $index),
+            ]);
+        }
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.index', [
+                'role_id' => $user->role_id,
+                'email_status' => 'verified',
+                'activity' => 'active_7',
+            ]))
+            ->assertOk()
+            ->assertSee('Erisim ve Performans')
+            ->assertSee('Toplam Kullanici')
+            ->assertSee($user->email)
+            ->assertSee('Aktif')
+            ->assertSee('1 test')
+            ->assertSee('20 soru')
+            ->assertSee('%80.0')
+            ->assertSee('Detay')
+            ->assertSee('Katki Kalitesi')
+            ->assertSee('1 oneri')
+            ->assertSee('1 itiraz')
+            ->assertSee('Son 5 Giris IP')
+            ->assertSee('10.0.0.6')
+            ->assertSee('10.0.0.2')
+            ->assertDontSee('10.0.0.1')
+            ->assertSee('Son 7 gun aktif')
+            ->assertDontSee('Filtrelere uygun kullanici bulunamadi.');
+    }
+
+    public function test_admin_can_toggle_user_status(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+
+        $this->actingAs($admin)
+            ->patch(route('admin.users.update-status', $user), [
+                'is_active' => false,
+            ])
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertFalse($user->fresh()->is_active);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'user.status_updated',
+            'entity_type' => 'users',
+            'entity_id' => $user->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.users.update-status', $user), [
+                'is_active' => true,
+            ])
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertTrue($user->fresh()->is_active);
+    }
+
+    public function test_admin_can_delete_regular_user_but_not_admin_user(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+
+        $this->actingAs($admin)
+            ->delete(route('admin.users.destroy', $user))
+            ->assertRedirect(route('admin.users.index'));
+
+        $this->assertSoftDeleted('users', ['id' => $user->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'user.deleted',
+            'entity_type' => 'users',
+            'entity_id' => $user->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.users.destroy', $admin))
+            ->assertSessionHasErrors('user');
+
+        $this->assertNotSoftDeleted('users', ['id' => $admin->id]);
+    }
+
+    public function test_admin_cannot_remove_last_admin_role(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $userRole = Role::query()->firstOrCreate(['name' => 'user']);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.users.update-role', $admin), [
+                'role_id' => $userRole->id,
+            ])
+            ->assertSessionHasErrors('role_id');
+
+        $this->assertTrue($admin->fresh()->isAdmin());
     }
 
     public function test_admin_can_rollback_question_to_previous_version(): void

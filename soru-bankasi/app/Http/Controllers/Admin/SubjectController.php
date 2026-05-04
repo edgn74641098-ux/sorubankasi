@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subject;
+use App\Services\SettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -11,6 +12,10 @@ use Illuminate\View\View;
 
 class SubjectController extends Controller
 {
+    public function __construct(private readonly SettingsService $settingsService)
+    {
+    }
+
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Subject::class);
@@ -94,11 +99,12 @@ class SubjectController extends Controller
         $this->authorize('delete', $subject);
 
         $archiveAt = now();
+        $purgeAfter = $this->purgeAfter($archiveAt);
 
         $subject->update([
             'is_active' => false,
             'archived_at' => $archiveAt,
-            'purge_after' => $archiveAt->copy()->addDays(7),
+            'purge_after' => $purgeAfter,
         ]);
 
         $subject->questions()
@@ -108,13 +114,31 @@ class SubjectController extends Controller
                 'approved_by' => null,
                 'approved_at' => null,
                 'archived_at' => $archiveAt,
-                'purge_after' => $archiveAt->copy()->addDays(7),
+                'purge_after' => $purgeAfter,
                 'updated_at' => now(),
             ]);
 
         return redirect()
             ->route('admin.archive.index')
-            ->with('success', 'Ders arsive tasindi. 7 gun sonra otomatik silme icin isaretlendi.');
+            ->with('success', $this->archiveMessage('Ders arsive tasindi.'));
+    }
+
+    private function purgeAfter($archiveAt)
+    {
+        if (! $this->settingsService->getBool('archive_auto_prune_enabled', true)) {
+            return null;
+        }
+
+        return $archiveAt->copy()->addDays($this->settingsService->getInt('archive_retention_days', 7));
+    }
+
+    private function archiveMessage(string $prefix): string
+    {
+        if (! $this->settingsService->getBool('archive_auto_prune_enabled', true)) {
+            return $prefix . ' Otomatik silme kapali.';
+        }
+
+        return $prefix . ' ' . $this->settingsService->getInt('archive_retention_days', 7) . ' gun sonra otomatik silme icin isaretlendi.';
     }
 
     private function generateUniqueSlug(string $name, ?int $ignoreId = null): string

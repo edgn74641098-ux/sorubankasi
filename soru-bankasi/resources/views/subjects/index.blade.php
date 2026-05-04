@@ -98,7 +98,11 @@
                                             <div class="d-flex align-items-start justify-content-between gap-3">
                                                 <div>
                                                     <div class="fw-semibold">{{ $subject->name }}</div>
-                                                    <div class="text-muted small">Slug: {{ $subject->slug }}</div>
+                                                    <div class="mt-2">
+                                                        <span class="badge text-bg-success">
+                                                            Basarim: {{ $subject->success_rate !== null ? '%' . number_format($subject->success_rate, 1) : '-' }}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <span class="badge text-bg-{{ $subject->approved_questions_count >= 20 ? 'primary' : 'secondary' }}">
                                                     {{ $subject->approved_questions_count }} soru
@@ -120,13 +124,16 @@
                         <div class="card-body">
                             <form method="POST" action="{{ route('tests.start') }}" class="row g-4">
                                 @csrf
+                                @php
+                                    $selectedSubjectId = old('subject_id', request('subject_id', $subjects->first()?->id));
+                                @endphp
 
                                 <div class="col-12">
                                     <label for="subject_id" class="form-label">Ders</label>
                                     <select id="subject_id" name="subject_id" class="form-select form-select-lg" required>
                                         <option value="">Ders secin</option>
                                         @foreach($subjects as $subject)
-                                            <option value="{{ $subject->id }}" @selected((string) old('subject_id', request('subject_id')) === (string) $subject->id)>
+                                            <option value="{{ $subject->id }}" data-weak-count="{{ $subject->weak_questions_count }}" @selected((string) $selectedSubjectId === (string) $subject->id)>
                                                 {{ $subject->name }} ({{ $subject->approved_questions_count }} soru)
                                             </option>
                                         @endforeach
@@ -135,6 +142,8 @@
 
                                 @php
                                     $selectedMode = old('mode', request('mode', 'RANDOM'));
+                                    $selectedSubject = $subjects->firstWhere('id', (int) $selectedSubjectId) ?? $subjects->first();
+                                    $selectedWeakQuestionCount = (int) ($selectedSubject?->weak_questions_count ?? 0);
                                     $modes = [
                                         'RANDOM' => ['Rastgele', 'Dersteki aktif soru havuzundan rastgele 20 soru secer.', 'bi-shuffle', 'sb-dashboard-card--brand'],
                                         'DIFFICULTY_RANGE' => ['Zorluk Araligi', 'Sectiginiz araliktan toplar, gerekirse ders havuzundan tamamlar.', 'bi-speedometer2', 'sb-dashboard-card--blue'],
@@ -153,6 +162,12 @@
                                                             <div class="rounded bg-primary-subtle text-primary d-inline-flex align-items-center justify-content-center mb-2" style="width: 38px; height: 38px;">
                                                                 <i class="bi {{ $icon }}"></i>
                                                             </div>
+                                                            @if($value === 'WEAKNESSES')
+                                                                <span class="badge text-bg-warning d-inline-flex align-items-center gap-1 mb-2">
+                                                                    <i class="bi bi-lightning-charge"></i>
+                                                                    <span id="weakQuestionModeCount">{{ $selectedWeakQuestionCount }}</span> takildigim soru
+                                                                </span>
+                                                            @endif
                                                             <span class="fw-semibold d-block">{{ $label }}</span>
                                                             <span class="d-block text-muted small mt-1">{{ $description }}</span>
                                                         </div>
@@ -209,6 +224,8 @@
         const maxOutput = document.getElementById('maxDifficultyValue');
         const difficultyBlock = document.querySelector('.js-difficulty-range-block');
         const modeInputs = document.querySelectorAll('input[name="mode"]');
+        const subjectSelect = document.getElementById('subject_id');
+        const weakQuestionModeCount = document.getElementById('weakQuestionModeCount');
 
         const syncDifficultyVisibility = () => {
             const selected = document.querySelector('input[name="mode"]:checked');
@@ -220,6 +237,18 @@
 
         modeInputs.forEach((input) => input.addEventListener('change', syncDifficultyVisibility));
         syncDifficultyVisibility();
+
+        const syncWeakQuestionCount = () => {
+            if (! subjectSelect || ! weakQuestionModeCount) {
+                return;
+            }
+
+            const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
+            weakQuestionModeCount.textContent = selectedOption?.dataset.weakCount || '0';
+        };
+
+        subjectSelect?.addEventListener('change', syncWeakQuestionCount);
+        syncWeakQuestionCount();
 
         if (minSlider && maxSlider) {
             const syncValues = () => {

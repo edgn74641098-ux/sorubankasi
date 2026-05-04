@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 class TestFinalizeService
 {
     public function __construct(
-        private readonly DifficultyCalculationService $difficultyService
+        private readonly DifficultyCalculationService $difficultyService,
+        private readonly SettingsService $settingsService
     ) {
     }
 
@@ -59,7 +60,12 @@ class TestFinalizeService
             foreach ($test->items as $item) {
                 $isCorrect = $item->user_answer !== null && $item->user_answer === $item->question->correct_option;
                 $isBlank = $item->user_answer === null;
-                $awardedPoints = $isCorrect ? 5 : 0;
+                $awardedPoints = match (true) {
+                    $isCorrect => $this->settingsService->getInt('correct_answer_points', 5),
+                    $isBlank => $this->settingsService->getInt('blank_answer_points', 0),
+                    $this->settingsService->getBool('wrong_answer_penalty_enabled', false) => -1 * $this->settingsService->getInt('wrong_answer_penalty_points', 0),
+                    default => 0,
+                };
 
                 if ($isCorrect) {
                     $correctCount++;
@@ -111,7 +117,7 @@ class TestFinalizeService
                 $recentHistory->save();
             }
 
-            $score = min(100, $correctCount * 5);
+            $score = max(0, min(100, (int) $test->items->sum('awarded_points')));
 
             $test->update([
                 'score' => $score,

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Providers\RouteServiceProvider;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,10 @@ use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
 {
+    public function __construct(private readonly AuditLogService $auditLog)
+    {
+    }
+
     /**
      * Display the login view.
      */
@@ -28,6 +33,17 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        $this->auditLog->record(
+            $request->user(),
+            'auth.login',
+            'users',
+            $request->user()->id,
+            null,
+            ['email' => $request->user()->email],
+            'Kullanici giris yapti.',
+            $request
+        );
 
         return redirect()->intended(RouteServiceProvider::HOME);
     }

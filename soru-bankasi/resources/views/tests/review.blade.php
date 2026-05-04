@@ -81,16 +81,6 @@
                                             <span class="badge text-bg-danger">Yanlis</span>
                                         @endif
                                     @endif
-                                    <button
-                                        type="button"
-                                        class="btn btn-sm btn-outline-warning"
-                                        data-bs-toggle="collapse"
-                                        data-bs-target="#reportQuestion{{ $item->question_id }}"
-                                        aria-expanded="{{ (string) old('question_id') === (string) $item->question_id ? 'true' : 'false' }}"
-                                        aria-controls="reportQuestion{{ $item->question_id }}"
-                                    >
-                                        <i class="bi bi-exclamation-triangle me-1"></i> Itiraz Et
-                                    </button>
                                 </div>
                             </div>
 
@@ -116,8 +106,12 @@
                                 </div>
                             @endif
 
-                            <div class="collapse mt-3 {{ (string) old('question_id') === (string) $item->question_id ? 'show' : '' }}" id="reportQuestion{{ $item->question_id }}">
-                                <form method="POST" action="{{ route('questions.report') }}" class="border rounded bg-white p-3">
+                            <details class="sb-report-details mt-3" id="reportQuestion{{ $item->question_id }}" @if((string) old('question_id') === (string) $item->question_id) open @endif>
+                                <summary class="btn btn-sm btn-outline-warning">
+                                    <i class="bi bi-exclamation-triangle me-1"></i> Itiraz Et
+                                </summary>
+
+                                <form method="POST" action="{{ route('questions.report') }}" class="border rounded bg-white p-3 mt-3">
                                     @csrf
                                     <input type="hidden" name="question_id" value="{{ $item->question_id }}">
 
@@ -157,7 +151,7 @@
                                         </div>
                                     </div>
                                 </form>
-                            </div>
+                            </details>
                         </div>
                     @endforeach
                 </div>

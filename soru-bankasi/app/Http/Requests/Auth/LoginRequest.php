@@ -50,6 +50,18 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        if (! Auth::user()->is_active) {
+            Auth::logout();
+            RateLimiter::hit($this->throttleKey(), $this->lockoutSeconds());
+
+            throw ValidationException::withMessages([
+                'email' => app(SettingsService::class)->getString(
+                    'inactive_login_message',
+                    'Kullanici hesabiniz pasif duruma getirilmistir. Lutfen yonetici ile iletisime gecin.'
+                ),
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

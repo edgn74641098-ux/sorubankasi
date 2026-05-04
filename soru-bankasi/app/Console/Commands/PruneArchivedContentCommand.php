@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Question;
 use App\Models\Subject;
+use App\Services\SettingsService;
 use Illuminate\Console\Command;
 
 class PruneArchivedContentCommand extends Command
@@ -14,6 +15,12 @@ class PruneArchivedContentCommand extends Command
 
     public function handle(): int
     {
+        if (! app(SettingsService::class)->getBool('archive_auto_prune_enabled', true)) {
+            $this->info('Archived cleanup skipped. Automatic archive pruning is disabled.');
+
+            return self::SUCCESS;
+        }
+
         $now = now();
 
         $deletedQuestions = 0;
