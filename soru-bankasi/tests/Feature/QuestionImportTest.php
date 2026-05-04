@@ -150,6 +150,31 @@ class QuestionImportTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_import_csv_without_explanation_column(): void
+    {
+        $admin = $this->createAdmin();
+        Subject::query()->create([
+            'name' => 'Matematik',
+            'slug' => 'matematik',
+            'is_active' => true,
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'questions-without-explanation');
+        file_put_contents($path, implode("\n", [
+            'subject,question_text,option_a,option_b,option_c,option_d,option_e,correct_option',
+            'Matematik,Aciklamasiz soru yuklenebilir mi?,Evet,Hayir,Belki,Asla,Farketmez,A',
+        ]));
+
+        $file = new UploadedFile($path, 'import-no-explanation.csv', 'text/csv', null, true);
+
+        $this->actingAs($admin)
+            ->post(route('admin.imports.store'), ['file' => $file])
+            ->assertRedirect();
+
+        $row = QuestionImportRow::query()->first();
+        $this->assertSame('', $row->payload_json['explanation_text']);
+    }
+
     private function createAdmin(): User
     {
         $adminRole = Role::query()->firstOrCreate(['name' => 'admin']);

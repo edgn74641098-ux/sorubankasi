@@ -257,7 +257,7 @@ class QuestionImportService
 
     private function normalizeRow(array $row): array
     {
-        $required = ['subject', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'correct_option', 'explanation_text'];
+        $required = ['subject', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'correct_option'];
         foreach ($required as $field) {
             if (empty($row[$field])) {
                 throw new \RuntimeException("Eksik alan: {$field}");
@@ -278,7 +278,7 @@ class QuestionImportService
             'option_d' => $this->cleanText($row['option_d']),
             'option_e' => $this->cleanText($row['option_e']),
             'correct_option' => $correct,
-            'explanation_text' => $this->cleanText($row['explanation_text']),
+            'explanation_text' => $this->cleanText($row['explanation_text'] ?? ''),
         ];
     }
 

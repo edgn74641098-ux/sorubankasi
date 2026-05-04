@@ -15,7 +15,7 @@
             <div class="w-100 sb-auth-width">
                 <a href="/" class="d-flex align-items-center justify-content-center gap-2 mb-4 text-decoration-none">
                     <span class="sb-brand-mark">SB</span>
-                    <span class="fw-bold text-white">Soru Bankasi</span>
+                    <span class="fw-bold text-white">Soru Bankası</span>
                 </a>
 
                 <div class="sb-auth-card bg-white p-4">

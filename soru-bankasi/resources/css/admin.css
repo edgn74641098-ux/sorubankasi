@@ -1510,6 +1510,41 @@ body.admin-body {
     gap: 20px;
 }
 
+.admin-audit-row {
+    display: grid;
+    grid-template-columns: 150px minmax(180px, 1fr) minmax(180px, 1fr) 120px minmax(220px, 1.4fr) auto;
+    gap: 14px;
+    align-items: center;
+}
+
+.admin-audit-table td,
+.admin-audit-table th {
+    padding-top: 0.72rem;
+    padding-bottom: 0.72rem;
+    font-size: 0.9rem;
+}
+
+.admin-audit-table .badge {
+    font-size: 0.74rem;
+}
+
+.sb-max-160 {
+    max-width: 160px;
+}
+
+.admin-json-block {
+    max-height: 360px;
+    overflow: auto;
+    margin: 0;
+    padding: 12px;
+    border-radius: 12px;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
 .min-w-0 {
     min-width: 0;
 }
@@ -1529,6 +1564,10 @@ body.admin-body {
 
     .admin-user-card__main {
         grid-template-columns: minmax(240px, 1.4fr) repeat(2, minmax(160px, 1fr));
+    }
+
+    .admin-audit-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .admin-user-filter__actions,
@@ -1572,6 +1611,10 @@ body.admin-body {
     .admin-user-stat-grid,
     .admin-user-filter,
     .admin-user-card__main {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-audit-row {
         grid-template-columns: 1fr;
     }
 

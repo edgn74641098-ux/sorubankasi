@@ -9,6 +9,7 @@ use App\Models\Subject;
 use App\Models\Test;
 use App\Models\User;
 use App\Models\UserRecentQuestionHistory;
+use App\Models\UserSubmittedQuestion;
 use App\Models\UserWrongQuestionStat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -342,6 +343,7 @@ class TestEngineTest extends TestCase
             ->assertSee('Verilen cevap: D - Apple Pages')
             ->assertSee('Dogru cevap: E - Faraday cantasi')
             ->assertSee('Itiraz Et')
+            ->assertSee('Gereksiz soru olarak raporla')
             ->assertSee('suggested_correct_option', false);
 
         $this->actingAs($user)
@@ -360,6 +362,76 @@ class TestEngineTest extends TestCase
             'question_id' => $question->id,
             'category' => 'WRONG_ANSWER',
             'suggested_correct_option' => 'D',
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($user)
+            ->from(route('tests.review', $test))
+            ->post(route('questions.report-unnecessary', $question), [
+                'reason' => 'Bu soru konu disi ve gereksiz gorunuyor.',
+            ])
+            ->assertRedirect(route('tests.review', $test))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('user_submitted_questions', [
+            'user_id' => $user->id,
+            'subject_id' => $subject->id,
+            'submission_type' => 'unnecessary_question_report',
+            'reported_question_id' => $question->id,
+            'status' => 'pending',
+        ]);
+        $this->assertSame(
+            'Bu soru konu disi ve gereksiz gorunuyor.',
+            UserSubmittedQuestion::query()->where('submission_type', 'unnecessary_question_report')->first()->payload_json['reason']
+        );
+        $this->assertSame(0, UserSubmittedQuestion::query()->where('submission_type', 'question_suggestion')->count());
+    }
+
+    public function test_active_test_question_report_uses_web_form_flow(): void
+    {
+        $user = $this->createVerifiedUser();
+        $subject = Subject::query()->create([
+            'name' => 'Ag Guvenligi',
+            'slug' => 'ag-guvenligi',
+            'is_active' => true,
+        ]);
+
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $user->id,
+            'approved_by' => $user->id,
+            'source_type' => 'admin',
+            'status' => 'active',
+            'approved_at' => now(),
+            'correct_option' => 'A',
+        ]);
+
+        $test = $this->createActiveTestWithQuestion($user, $subject, $question, 'B');
+
+        $this->actingAs($user)
+            ->get(route('tests.show', $test))
+            ->assertOk()
+            ->assertSee('Itiraz')
+            ->assertSee(route('questions.report'), false)
+            ->assertSee('name="suggested_correct_option"', false)
+            ->assertDontSee('/api/reports');
+
+        $this->actingAs($user)
+            ->from(route('tests.show', $test))
+            ->post(route('questions.report'), [
+                'question_id' => $question->id,
+                'category' => 'WRONG_ANSWER',
+                'suggested_correct_option' => 'B',
+                'note' => 'Test cozerken bu soruya itiraz ediyorum.',
+            ])
+            ->assertRedirect(route('tests.show', $test))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('question_reports', [
+            'user_id' => $user->id,
+            'question_id' => $question->id,
+            'category' => 'WRONG_ANSWER',
+            'suggested_correct_option' => 'B',
             'status' => 'pending',
         ]);
     }

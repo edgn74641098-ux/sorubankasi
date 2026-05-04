@@ -14,14 +14,6 @@
         </div>
     </section>
 
-    @if (session('success'))
-        <div class="alert alert-success">{{ session('success') }}</div>
-    @endif
-
-    @if ($errors->any())
-        <div class="alert alert-danger">{{ $errors->first() }}</div>
-    @endif
-
     <form method="POST" action="{{ route('admin.settings.update') }}">
         @csrf
         @method('PUT')
@@ -38,14 +30,18 @@
                     <div class="admin-panel__content">
                         <div class="row g-3">
                             @foreach($settings as $key => $setting)
-                                @php($value = old($key, $setting['value']))
+                                @php
+                                    $value = old($key, $setting['value']);
+                                    $booleanValue = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+                                    $booleanValue = $booleanValue ?? false;
+                                @endphp
                                 <div class="{{ $setting['type'] === 'text' ? 'col-12' : 'col-md-6' }}">
                                     <label for="{{ $key }}" class="form-label fw-semibold">{{ $setting['label'] }}</label>
 
                                     @if($setting['type'] === 'boolean')
                                         <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>
-                                            <option value="1" @selected((bool) $value === true)>Acik</option>
-                                            <option value="0" @selected((bool) $value === false)>Kapali</option>
+                                            <option value="1" @selected($booleanValue === true)>Acik</option>
+                                            <option value="0" @selected($booleanValue === false)>Kapali</option>
                                         </select>
                                     @elseif($key === 'test_feedback_mode')
                                         <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>

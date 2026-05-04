@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,6 +15,8 @@ class PasswordResetTest extends TestCase
 
     public function test_reset_password_link_screen_can_be_rendered(): void
     {
+        $this->seedSetting('password_reset_enabled', true);
+
         $response = $this->get('/forgot-password');
 
         $response->assertStatus(200);
@@ -21,6 +24,8 @@ class PasswordResetTest extends TestCase
 
     public function test_reset_password_link_can_be_requested(): void
     {
+        $this->seedSetting('password_reset_enabled', true);
+
         Notification::fake();
 
         $user = User::factory()->create();
@@ -32,6 +37,8 @@ class PasswordResetTest extends TestCase
 
     public function test_reset_password_screen_can_be_rendered(): void
     {
+        $this->seedSetting('password_reset_enabled', true);
+
         Notification::fake();
 
         $user = User::factory()->create();
@@ -49,6 +56,8 @@ class PasswordResetTest extends TestCase
 
     public function test_password_can_be_reset_with_valid_token(): void
     {
+        $this->seedSetting('password_reset_enabled', true);
+
         Notification::fake();
 
         $user = User::factory()->create();
@@ -69,5 +78,44 @@ class PasswordResetTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_password_reset_is_disabled_by_default(): void
+    {
+        Notification::fake();
+
+        $user = User::factory()->create();
+
+        $this->get('/login')
+            ->assertOk()
+            ->assertDontSee('Şifrenizi mi unuttunuz?');
+
+        $this->get('/forgot-password')->assertNotFound();
+        $this->post('/forgot-password', ['email' => $user->email])->assertNotFound();
+        $this->get('/reset-password/fake-token')->assertNotFound();
+        $this->post('/reset-password', [
+            'token' => 'fake-token',
+            'email' => $user->email,
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertNotFound();
+
+        Notification::assertNothingSent();
+    }
+
+    public function test_password_reset_link_is_visible_when_enabled(): void
+    {
+        $this->seedSetting('password_reset_enabled', true);
+
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('Şifrenizi mi unuttunuz?');
+    }
+
+    private function seedSetting(string $key, mixed $value): void
+    {
+        $setting = Setting::query()->firstOrNew(['key' => $key]);
+        $setting->setTypedValue($value);
+        $setting->save();
     }
 }

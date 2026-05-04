@@ -43,10 +43,21 @@
             @if($questions->isEmpty())
                 <div class="alert alert-info mb-0">Filtrelere uygun soru bulunamadi.</div>
             @else
+                <form id="bulkArchiveForm" method="POST" action="{{ route('admin.questions.archive-bulk') }}" class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                    @csrf
+                    <div class="text-muted small">Secili sorulari tek seferde arsive tasiyabilirsiniz.</div>
+                    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Secili sorulari arsive tasimak istediginize emin misiniz?')">
+                        Secilileri Arsive Tasi
+                    </button>
+                </form>
+
                 <div class="table-responsive">
                     <table class="table align-middle">
                         <thead>
                             <tr>
+                                <th class="sb-width-48">
+                                    <input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('.js-question-select').forEach((el) => el.checked = this.checked)">
+                                </th>
                                 <th>Ders</th>
                                 <th>Soru</th>
                                 <th>Zorluk</th>
@@ -58,6 +69,9 @@
                         <tbody>
                             @foreach($questions as $question)
                                 <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input js-question-select" name="question_ids[]" value="{{ $question->id }}" form="bulkArchiveForm">
+                                    </td>
                                     <td>{{ $question->subject?->name }}</td>
                                     <td class="sb-min-340">{{ \Illuminate\Support\Str::limit($question->question_text, 120) }}</td>
                                     <td>{{ number_format((float) $question->difficulty_score, 1) }}</td>

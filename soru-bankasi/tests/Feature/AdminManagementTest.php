@@ -30,6 +30,7 @@ class AdminManagementTest extends TestCase
             'inactive_login_message' => 'Hesabiniz pasif duruma alinmistir.',
             'email_verification_required' => '1',
             'google_auth_enabled' => '1',
+            'password_reset_enabled' => '1',
             'daily_test_limit' => '15',
             'daily_question_limit' => '12',
             'login_rate_limit' => '4',
@@ -59,6 +60,79 @@ class AdminManagementTest extends TestCase
             'action' => 'settings.updated',
             'entity_type' => 'settings',
         ]);
+
+        $response = $this->actingAs($admin)
+            ->withSession(['success' => 'Ayarlar guncellendi.'])
+            ->get(route('admin.settings.index'))
+            ->assertOk();
+
+        $this->assertSame(1, substr_count($response->getContent(), 'Ayarlar guncellendi.'));
+    }
+
+    public function test_settings_page_shows_boolean_values_correctly_and_creates_missing_defaults(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $this->seedSetting('google_auth_enabled', false);
+        $this->seedSetting('email_verification_required', false);
+        $this->seedSetting('password_reset_enabled', false);
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.settings.index'))
+            ->assertOk()
+            ->assertSee('Google ile giris')
+            ->assertSee('E-posta dogrulama zorunlu')
+            ->assertSee('Sifremi unuttum linki');
+
+        $html = $response->getContent();
+        $this->assertMatchesRegularExpression('/<select[^>]*id="google_auth_enabled"[\s\S]*?<option value="0" selected>Kapali<\/option>/', $html);
+        $this->assertMatchesRegularExpression('/<select[^>]*id="email_verification_required"[\s\S]*?<option value="0" selected>Kapali<\/option>/', $html);
+        $this->assertMatchesRegularExpression('/<select[^>]*id="password_reset_enabled"[\s\S]*?<option value="0" selected>Kapali<\/option>/', $html);
+
+        $this->assertDatabaseHas('settings', [
+            'key' => 'leaderboard_global_limit',
+            'value_type' => 'integer',
+            'value' => '20',
+        ]);
+    }
+
+    public function test_admin_can_change_settings_off_and_on(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+
+        $this->actingAs($admin)->put(route('admin.settings.update'), [
+            'test_feedback_mode' => 'DELAYED_FEEDBACK',
+            'registration_open' => '0',
+            'inactive_login_message' => 'Hesabiniz gecici olarak pasif duruma alinmistir.',
+            'email_verification_required' => '0',
+            'google_auth_enabled' => '0',
+            'password_reset_enabled' => '0',
+            'daily_test_limit' => '11',
+            'daily_question_limit' => '9',
+            'login_rate_limit' => '3',
+            'login_lockout_duration' => '300',
+            'minimum_leaderboard_tests' => '2',
+            'correct_answer_points' => '6',
+            'wrong_answer_penalty_enabled' => '1',
+            'wrong_answer_penalty_points' => '2',
+            'blank_answer_points' => '1',
+            'leaderboard_global_limit' => '18',
+            'leaderboard_weekly_limit' => '4',
+            'leaderboard_form_limit' => '4',
+            'question_report_accept_message' => 'Itiraziniz kabul edildi. Yeni cevap: {new_answer}',
+            'user_submissions_enabled' => '0',
+            'submission_approval_reward' => '12',
+            'submission_rejection_note_required' => '0',
+            'archive_retention_days' => '14',
+            'archive_auto_prune_enabled' => '0',
+            'maintenance_mode' => '0',
+            'backup_mode' => 'automatic',
+            'current_password' => 'password',
+        ])->assertRedirect(route('admin.settings.index'));
+
+        $this->assertSame(false, Setting::query()->where('key', 'registration_open')->first()->typed_value);
+        $this->assertSame(false, Setting::query()->where('key', 'google_auth_enabled')->first()->typed_value);
+        $this->assertSame(18, Setting::query()->where('key', 'leaderboard_global_limit')->first()->typed_value);
+        $this->assertSame('automatic', Setting::query()->where('key', 'backup_mode')->first()->typed_value);
     }
 
     public function test_admin_can_update_user_role_and_audit_the_change(): void
@@ -391,7 +465,7 @@ class AdminManagementTest extends TestCase
 
         $this->actingAs($admin)
             ->delete(route('admin.questions.destroy', $question))
-            ->assertRedirect(route('admin.archive.index'));
+            ->assertRedirect(route('admin.questions.index'));
 
         $question->refresh();
 
@@ -413,6 +487,32 @@ class AdminManagementTest extends TestCase
             ->get(route('admin.archive.index'))
             ->assertOk()
             ->assertSee($question->question_text);
+    }
+
+    public function test_admin_can_bulk_archive_questions(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create(['is_active' => true]);
+        $questions = Question::factory()->count(2)->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => $admin->id,
+            'status' => 'active',
+            'approved_at' => now(),
+            'current_version' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.questions.archive-bulk'), [
+                'question_ids' => $questions->pluck('id')->all(),
+            ])
+            ->assertRedirect(route('admin.questions.index'));
+
+        $questions->each(function (Question $question): void {
+            $question->refresh();
+            $this->assertSame('archived', $question->status);
+            $this->assertNotNull($question->archived_at);
+        });
     }
 
     public function test_archive_prune_deletes_expired_unreferenced_records(): void
@@ -495,6 +595,88 @@ class AdminManagementTest extends TestCase
             ->assertSee('Arama Dersi')
             ->assertSee('Sorular')
             ->assertSee('Arama icin benzersiz soru metni');
+    }
+
+    public function test_admin_can_view_enhanced_audit_logs_with_filters_and_details(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+
+        AuditLog::query()->create([
+            'actor_id' => $user->id,
+            'action' => 'auth.login_failed',
+            'entity_type' => 'auth',
+            'entity_id' => $user->id,
+            'new_value' => ['email' => $user->email],
+            'reason' => 'Basarisiz giris denemesi.',
+            'ip_address' => '10.10.10.10',
+            'user_agent' => 'Feature Test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        AuditLog::query()->create([
+            'actor_id' => $admin->id,
+            'action' => 'settings.updated',
+            'entity_type' => 'settings',
+            'old_value' => ['registration_open' => true],
+            'new_value' => ['registration_open' => false],
+            'reason' => 'Admin ayarlari guncellendi.',
+            'ip_address' => '10.10.10.11',
+            'user_agent' => 'Feature Test',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.audit-logs.index', [
+                'severity' => 'security',
+                'ip_address' => '10.10.10.10',
+            ]))
+            ->assertOk()
+            ->assertSee('Guvenlik ve Operasyon Izleme')
+            ->assertSee('Giris Riski')
+            ->assertSee('auth.login_failed')
+            ->assertSee('10.10.10.10')
+            ->assertSee('Basarisiz giris denemesi.')
+            ->assertSee('Detay')
+            ->assertDontSee('Admin ayarlari guncellendi.');
+    }
+
+    public function test_audit_log_page_hides_regular_user_login_entries_but_keeps_admin_and_editor_logins(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $editor = $this->createUserWithRole('editor');
+        $user = $this->createUserWithRole('user');
+
+        foreach ([
+            [$admin, 'Admin giris kaydi'],
+            [$editor, 'Editor giris kaydi'],
+            [$user, 'Normal kullanici giris kaydi'],
+        ] as [$actor, $reason]) {
+            AuditLog::query()->create([
+                'actor_id' => $actor->id,
+                'action' => 'auth.login',
+                'entity_type' => 'users',
+                'entity_id' => $actor->id,
+                'reason' => $reason,
+                'ip_address' => '10.10.10.'.$actor->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $user->id,
+            'action' => 'auth.login',
+            'reason' => 'Normal kullanici giris kaydi',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.audit-logs.index', ['action' => 'auth.login']))
+            ->assertOk()
+            ->assertSee('Admin giris kaydi')
+            ->assertSee('Editor giris kaydi')
+            ->assertDontSee('Normal kullanici giris kaydi');
     }
 
     public function test_editor_dashboard_hides_admin_only_audit_link(): void

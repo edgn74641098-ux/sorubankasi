@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Question;
+use App\Models\QuestionVersion;
 use App\Models\Subject;
 use App\Models\UserSubmittedQuestion;
 use App\Services\AuditLogService;
@@ -66,9 +67,73 @@ class UserSubmittedQuestionController extends Controller
         return view('questions.my-submissions', [
             'submissions' => $user->submittedQuestions()
                 ->with('subject')
+                ->where('submission_type', 'question_suggestion')
                 ->latest('created_at')
                 ->paginate(10),
         ]);
+    }
+
+    public function reportUnnecessary(Request $request, Question $question): RedirectResponse
+    {
+        $user = $request->user();
+
+        if ($question->status === 'archived') {
+            return back()->withErrors([
+                'submission' => 'Bu soru zaten sistemden kaldirilmis.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+
+        $existing = UserSubmittedQuestion::query()
+            ->where('user_id', $user->id)
+            ->where('reported_question_id', $question->id)
+            ->where('submission_type', 'unnecessary_question_report')
+            ->where('status', 'pending')
+            ->first();
+
+        if ($existing) {
+            return back()->with('info', 'Bu soru icin bekleyen gereksiz soru bildiriminiz zaten var.');
+        }
+
+        $submission = UserSubmittedQuestion::query()->create([
+            'user_id' => $user->id,
+            'subject_id' => $question->subject_id,
+            'submission_type' => 'unnecessary_question_report',
+            'reported_question_id' => $question->id,
+            'payload_json' => [
+                'question_id' => $question->id,
+                'question_text' => $question->question_text,
+                'options' => [
+                    'A' => $question->option_a,
+                    'B' => $question->option_b,
+                    'C' => $question->option_c,
+                    'D' => $question->option_d,
+                    'E' => $question->option_e,
+                ],
+                'correct_option' => $question->correct_option,
+                'reason' => $validated['reason'],
+            ],
+            'status' => 'pending',
+        ]);
+
+        $this->auditLog->record(
+            $user,
+            'user_submission.unnecessary_question_reported',
+            'user_submitted_questions',
+            $submission->id,
+            null,
+            [
+                'question_id' => $question->id,
+                'reason' => $validated['reason'],
+            ],
+            'Kullanici gereksiz soru bildirimi gonderdi.',
+            $request
+        );
+
+        return back()->with('success', 'Gereksiz soru bildiriminiz inceleme kuyruguna alindi.');
     }
 
     public function apiMySubmissions(Request $request): JsonResponse
@@ -76,6 +141,7 @@ class UserSubmittedQuestionController extends Controller
         $submissions = $request->user()
             ->submittedQuestions()
             ->with('subject:id,name,slug')
+            ->where('submission_type', 'question_suggestion')
             ->latest('created_at')
             ->paginate(15);
 
@@ -133,7 +199,7 @@ class UserSubmittedQuestionController extends Controller
 
         return view('admin.submissions.pending', [
             'submissions' => UserSubmittedQuestion::query()
-                ->with(['user:id,name,email', 'subject:id,name'])
+                ->with(['user:id,name,email', 'subject:id,name', 'reportedQuestion:id,subject_id,question_text,status,approved_by,approved_at,archived_at,purge_after,current_version'])
                 ->where('status', 'pending')
                 ->latest('created_at')
                 ->paginate(15),
@@ -148,6 +214,10 @@ class UserSubmittedQuestionController extends Controller
 
         if ($submission->status !== 'pending') {
             return back()->withErrors('Bu soru zaten incelenmis.');
+        }
+
+        if ($submission->isUnnecessaryQuestionReport()) {
+            return $this->approveUnnecessaryQuestionReport($request, $submission);
         }
 
         DB::transaction(function () use ($request, $submission): void {
@@ -224,11 +294,12 @@ class UserSubmittedQuestionController extends Controller
             $submission->id,
             ['status' => 'pending'],
             ['status' => 'rejected', 'review_note' => $validated['review_note'] ?? null],
-            'Kullanici sorusu reddedildi.' . (filled($validated['review_note'] ?? null) ? " Sebep: {$validated['review_note']}" : ''),
+            ($submission->isUnnecessaryQuestionReport() ? 'Gereksiz soru bildirimi reddedildi.' : 'Kullanici sorusu reddedildi.')
+                . (filled($validated['review_note'] ?? null) ? " Sebep: {$validated['review_note']}" : ''),
             $request
         );
 
-        return back()->with('success', 'Soru reddedildi.');
+        return back()->with('success', $submission->isUnnecessaryQuestionReport() ? 'Bildirim reddedildi. Soru sistemde kalmaya devam edecek.' : 'Soru reddedildi.');
     }
 
     public function revokeApproval(Request $request, UserSubmittedQuestion $submission): RedirectResponse
@@ -306,6 +377,7 @@ class UserSubmittedQuestionController extends Controller
         return UserSubmittedQuestion::query()->create([
             'user_id' => $user->id,
             'subject_id' => $validated['subject_id'],
+            'submission_type' => 'question_suggestion',
             'payload_json' => [
                 'question_text' => $validated['question_text'],
                 'options' => [
@@ -320,5 +392,96 @@ class UserSubmittedQuestionController extends Controller
             ],
             'status' => 'pending',
         ]);
+    }
+
+    private function approveUnnecessaryQuestionReport(Request $request, UserSubmittedQuestion $submission): RedirectResponse
+    {
+        $question = $submission->reportedQuestion;
+
+        if (! $question || $question->status === 'archived') {
+            $submission->update([
+                'status' => 'approved',
+                'reviewed_by' => Auth::id(),
+                'reviewed_at' => now(),
+                'review_note' => $request->input('review_note') ?: null,
+            ]);
+
+            return back()->with('success', 'Bildirim onaylandi. Soru zaten sistemden kaldirilmis.');
+        }
+
+        DB::transaction(function () use ($request, $submission, $question): void {
+            $currentVersion = (int) $question->current_version;
+            $archiveAt = now();
+            $oldValue = $this->questionPayload($question);
+
+            QuestionVersion::query()->create([
+                'question_id' => $question->id,
+                'version_no' => $currentVersion,
+                'changed_by' => $request->user()->id,
+                'change_reason' => 'Gereksiz soru bildirimi onayi ile sistemden kaldirma',
+                'payload_json' => $oldValue,
+            ]);
+
+            $question->update([
+                'status' => 'archived',
+                'approved_by' => null,
+                'approved_at' => null,
+                'archived_at' => $archiveAt,
+                'purge_after' => $this->purgeAfter($archiveAt),
+                'current_version' => $currentVersion + 1,
+            ]);
+
+            $submission->update([
+                'status' => 'approved',
+                'approved_question_id' => $question->id,
+                'reviewed_by' => Auth::id(),
+                'reviewed_at' => now(),
+                'review_note' => $request->input('review_note') ?: null,
+            ]);
+
+            $this->auditLog->record(
+                $request->user(),
+                'user_submission.unnecessary_question_approved',
+                'user_submitted_questions',
+                $submission->id,
+                ['status' => 'pending', 'question' => $oldValue],
+                ['status' => 'approved', 'question' => $this->questionPayload($question->fresh())],
+                'Gereksiz soru bildirimi onaylandi ve soru sistemden kaldirildi.',
+                $request
+            );
+        });
+
+        return back()->with('success', 'Bildirim onaylandi. Soru sistemden kaldirildi.');
+    }
+
+    private function purgeAfter($archiveAt)
+    {
+        if (! $this->settingsService->getBool('archive_auto_prune_enabled', true)) {
+            return null;
+        }
+
+        return $archiveAt->copy()->addDays($this->settingsService->getInt('archive_retention_days', 7));
+    }
+
+    private function questionPayload(Question $question): array
+    {
+        return [
+            'subject_id' => $question->subject_id,
+            'question_text' => $question->question_text,
+            'option_a' => $question->option_a,
+            'option_b' => $question->option_b,
+            'option_c' => $question->option_c,
+            'option_d' => $question->option_d,
+            'option_e' => $question->option_e,
+            'correct_option' => $question->correct_option,
+            'explanation_text' => $question->explanation_text,
+            'difficulty_score' => $question->difficulty_score,
+            'status' => $question->status,
+            'approved_by' => $question->approved_by,
+            'approved_at' => optional($question->approved_at)->toISOString(),
+            'archived_at' => optional($question->archived_at)->toISOString(),
+            'purge_after' => optional($question->purge_after)->toISOString(),
+            'current_version' => $question->current_version,
+        ];
     }
 }

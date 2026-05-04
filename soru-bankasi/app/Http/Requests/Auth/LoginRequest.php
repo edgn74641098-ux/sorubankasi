@@ -8,7 +8,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
+use App\Services\AuditLogService;
 use App\Services\SettingsService;
+use App\Services\CaptchaService;
 
 class LoginRequest extends FormRequest
 {
@@ -30,6 +33,7 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'captcha_answer' => ['required', 'string'],
         ];
     }
 
@@ -40,10 +44,39 @@ class LoginRequest extends FormRequest
      */
     public function authenticate(): void
     {
+        if (! app(CaptchaService::class)->validate($this, $this->input('captcha_answer'))) {
+            app(AuditLogService::class)->record(
+                null,
+                'auth.captcha_failed',
+                'auth',
+                null,
+                null,
+                ['email' => $this->input('email')],
+                'Giris guvenlik dogrulamasi hatali.',
+                $this
+            );
+
+            throw ValidationException::withMessages([
+                'captcha_answer' => 'Guvenlik dogrulamasi hatali.',
+            ]);
+        }
+
         $this->ensureIsNotRateLimited();
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey(), $this->lockoutSeconds());
+            $user = User::query()->where('email', $this->string('email')->lower()->value())->first();
+
+            app(AuditLogService::class)->record(
+                $user,
+                'auth.login_failed',
+                'auth',
+                $user?->id,
+                null,
+                ['email' => $this->input('email')],
+                'Basarisiz giris denemesi.',
+                $this
+            );
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
@@ -51,8 +84,20 @@ class LoginRequest extends FormRequest
         }
 
         if (! Auth::user()->is_active) {
+            $blockedUser = Auth::user();
             Auth::logout();
             RateLimiter::hit($this->throttleKey(), $this->lockoutSeconds());
+
+            app(AuditLogService::class)->record(
+                $blockedUser,
+                'auth.login_blocked_passive',
+                'users',
+                $blockedUser->id,
+                null,
+                ['email' => $blockedUser->email],
+                'Pasif kullanici girisi engellendi.',
+                $this
+            );
 
             throw ValidationException::withMessages([
                 'email' => app(SettingsService::class)->getString(

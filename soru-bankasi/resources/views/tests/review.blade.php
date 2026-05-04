@@ -152,6 +152,26 @@
                                     </div>
                                 </form>
                             </details>
+
+                            <details class="sb-report-details mt-2" id="unnecessaryQuestion{{ $item->question_id }}" @if($errors->has('reason')) open @endif>
+                                <summary class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash3 me-1"></i> Gereksiz soru olarak raporla
+                                </summary>
+
+                                <form method="POST" action="{{ route('questions.report-unnecessary', $item->question) }}" class="border rounded bg-white p-3 mt-3">
+                                    @csrf
+                                    <label for="unnecessary_reason_{{ $item->question_id }}" class="form-label small fw-semibold">Raporlama nedeni</label>
+                                    <textarea id="unnecessary_reason_{{ $item->question_id }}" name="reason" rows="2" maxlength="500" class="form-control form-control-sm" required placeholder="Bu sorunun neden gereksiz oldugunu kisaca aciklayin.">{{ old('reason') }}</textarea>
+                                    <div class="form-text">En fazla 500 karakter.</div>
+                                    @error('reason')
+                                        <div class="text-danger small mt-1">{{ $message }}</div>
+                                    @enderror
+
+                                    <button type="submit" class="btn btn-danger btn-sm mt-3" onclick="return confirm('Bu soruyu gereksiz soru olarak raporlamak istediginize emin misiniz?');">
+                                        <i class="bi bi-send me-1"></i> Bildirimi Gonder
+                                    </button>
+                                </form>
+                            </details>
                         </div>
                     @endforeach
                 </div>

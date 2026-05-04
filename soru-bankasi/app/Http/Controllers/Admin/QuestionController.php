@@ -6,17 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Models\Question;
 use App\Models\QuestionVersion;
 use App\Models\Subject;
+use App\Services\AuditLogService;
 use App\Services\SettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class QuestionController extends Controller
 {
-    public function __construct(private readonly SettingsService $settingsService)
-    {
+    public function __construct(
+        private readonly SettingsService $settingsService,
+        private readonly AuditLogService $auditLog
+    ) {
     }
 
     public function index(Request $request): View
@@ -70,7 +74,7 @@ class QuestionController extends Controller
         $validated = $this->validateQuestion($request);
         $statusMeta = $this->statusMeta($validated['status'], $request);
 
-        Question::query()->create([
+        $question = Question::query()->create([
             'subject_id' => $validated['subject_id'],
             'created_by' => $request->user()->id,
             'approved_by' => $statusMeta['approved_by'],
@@ -90,6 +94,17 @@ class QuestionController extends Controller
                 'purge_after' => null,
                 'current_version' => 1,
             ]);
+
+        $this->auditLog->record(
+            $request->user(),
+            'question.created',
+            'questions',
+            $question->id,
+            null,
+            $this->versionPayload($question),
+            'Soru olusturuldu.',
+            $request
+        );
 
         return redirect()
             ->route('admin.questions.index')
@@ -117,6 +132,7 @@ class QuestionController extends Controller
 
         DB::transaction(function () use ($request, $question, $validated, $statusMeta): void {
             $currentVersion = (int) $question->current_version;
+            $oldValue = $this->versionPayload($question);
 
             QuestionVersion::query()->create([
                 'question_id' => $question->id,
@@ -144,6 +160,17 @@ class QuestionController extends Controller
                 'purge_after' => $validated['status'] === 'archived' ? ($question->purge_after ?: $this->purgeAfter(now())) : null,
                 'current_version' => $currentVersion + 1,
             ]);
+
+            $this->auditLog->record(
+                $request->user(),
+                'question.updated',
+                'questions',
+                $question->id,
+                $oldValue,
+                $this->versionPayload($question->fresh()),
+                'Soru guncellendi.',
+                $request
+            );
         });
 
         return redirect()
@@ -155,30 +182,83 @@ class QuestionController extends Controller
     {
         $this->authorize('delete', $question);
 
-        DB::transaction(function () use ($question): void {
-            $currentVersion = (int) $question->current_version;
-
-            QuestionVersion::query()->create([
-                'question_id' => $question->id,
-                'version_no' => $currentVersion,
-                'changed_by' => request()->user()?->id,
-                'change_reason' => 'Pasife alma oncesi otomatik surum kaydi',
-                'payload_json' => $this->versionPayload($question),
-            ]);
-
-            $question->update([
-                'status' => 'archived',
-                'approved_by' => null,
-                'approved_at' => null,
-                'archived_at' => now(),
-                'purge_after' => $this->purgeAfter(now()),
-                'current_version' => $currentVersion + 1,
-            ]);
-        });
+        DB::transaction(fn () => $this->archiveQuestion($question, request()));
 
         return redirect()
-            ->route('admin.archive.index')
+            ->route('admin.questions.index')
             ->with('success', $this->archiveMessage('Soru arsive tasindi.'));
+    }
+
+    public function archiveBulk(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'question_ids' => ['required', 'array', 'min:1'],
+            'question_ids.*' => ['integer', 'exists:questions,id'],
+        ]);
+
+        $questions = Question::query()
+            ->whereIn('id', $validated['question_ids'])
+            ->where('status', '!=', 'archived')
+            ->get();
+
+        $questions->each(fn (Question $question) => $this->authorize('delete', $question));
+
+        DB::transaction(fn () => $this->archiveQuestions($questions, $request));
+
+        $this->auditLog->record(
+            $request->user(),
+            'question.archived_bulk',
+            'questions',
+            null,
+            null,
+            ['question_ids' => $questions->pluck('id')->all(), 'count' => $questions->count()],
+            $questions->count() . ' soru toplu arsive tasindi.',
+            $request
+        );
+
+        return redirect()
+            ->route('admin.questions.index')
+            ->with('success', $questions->count() . ' soru arsive tasindi.');
+    }
+
+    private function archiveQuestions(Collection $questions, Request $request): void
+    {
+        $questions->each(fn (Question $question) => $this->archiveQuestion($question, $request));
+    }
+
+    private function archiveQuestion(Question $question, Request $request): void
+    {
+        $currentVersion = (int) $question->current_version;
+        $archiveAt = now();
+        $oldValue = $this->versionPayload($question);
+
+        QuestionVersion::query()->create([
+            'question_id' => $question->id,
+            'version_no' => $currentVersion,
+            'changed_by' => request()->user()?->id,
+            'change_reason' => 'Arsive alma oncesi otomatik surum kaydi',
+            'payload_json' => $this->versionPayload($question),
+        ]);
+
+        $question->update([
+            'status' => 'archived',
+            'approved_by' => null,
+            'approved_at' => null,
+            'archived_at' => $archiveAt,
+            'purge_after' => $this->purgeAfter($archiveAt),
+            'current_version' => $currentVersion + 1,
+        ]);
+
+        $this->auditLog->record(
+            $request->user(),
+            'question.archived',
+            'questions',
+            $question->id,
+            $oldValue,
+            $this->versionPayload($question->fresh()),
+            'Soru arsive tasindi.',
+            $request
+        );
     }
 
     private function purgeAfter($archiveAt)

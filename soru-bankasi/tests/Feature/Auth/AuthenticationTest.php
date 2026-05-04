@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use App\Providers\RouteServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -22,9 +23,10 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $response = $this->post('/login', [
+        $response = $this->withValidCaptcha()->post('/login', [
             'email' => $user->email,
             'password' => 'password',
+            'captcha_answer' => '7',
         ]);
 
         $this->assertAuthenticated();
@@ -41,9 +43,10 @@ class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $this->post('/login', [
+        $this->withValidCaptcha()->post('/login', [
             'email' => $user->email,
             'password' => 'wrong-password',
+            'captcha_answer' => '7',
         ]);
 
         $this->assertGuest();
@@ -55,9 +58,10 @@ class AuthenticationTest extends TestCase
             'is_active' => false,
         ]);
 
-        $response = $this->from('/login')->post('/login', [
+        $response = $this->withValidCaptcha()->from('/login')->post('/login', [
             'email' => $user->email,
             'password' => 'password',
+            'captcha_answer' => '7',
         ]);
 
         $this->assertGuest();
@@ -75,5 +79,13 @@ class AuthenticationTest extends TestCase
 
         $this->assertGuest();
         $response->assertRedirect('/');
+    }
+
+    private function withValidCaptcha(): self
+    {
+        return $this->withSession([
+            'captcha.prompt' => '3 + 4 = ?',
+            'captcha.answer_hash' => Hash::make('7'),
+        ]);
     }
 }

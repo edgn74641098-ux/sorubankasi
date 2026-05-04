@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subject;
+use App\Services\AuditLogService;
 use App\Services\SettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,8 +13,10 @@ use Illuminate\View\View;
 
 class SubjectController extends Controller
 {
-    public function __construct(private readonly SettingsService $settingsService)
-    {
+    public function __construct(
+        private readonly SettingsService $settingsService,
+        private readonly AuditLogService $auditLog
+    ) {
     }
 
     public function index(Request $request): View
@@ -52,11 +55,22 @@ class SubjectController extends Controller
             'name' => ['required', 'string', 'max:255', 'unique:subjects,name'],
         ]);
 
-        Subject::query()->create([
+        $subject = Subject::query()->create([
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($validated['name']),
             'is_active' => true,
         ]);
+
+        $this->auditLog->record(
+            $request->user(),
+            'subject.created',
+            'subjects',
+            $subject->id,
+            null,
+            $this->auditPayload($subject),
+            'Ders olusturuldu.',
+            $request
+        );
 
         return redirect()
             ->route('admin.subjects.index')
@@ -81,6 +95,8 @@ class SubjectController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
+        $oldValue = $this->auditPayload($subject);
+
         $subject->update([
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($validated['name'], $subject->id),
@@ -88,6 +104,17 @@ class SubjectController extends Controller
             'archived_at' => null,
             'purge_after' => null,
         ]);
+
+        $this->auditLog->record(
+            $request->user(),
+            'subject.updated',
+            'subjects',
+            $subject->id,
+            $oldValue,
+            $this->auditPayload($subject->fresh()),
+            'Ders guncellendi.',
+            $request
+        );
 
         return redirect()
             ->route('admin.subjects.index')
@@ -100,6 +127,7 @@ class SubjectController extends Controller
 
         $archiveAt = now();
         $purgeAfter = $this->purgeAfter($archiveAt);
+        $oldValue = $this->auditPayload($subject);
 
         $subject->update([
             'is_active' => false,
@@ -117,6 +145,17 @@ class SubjectController extends Controller
                 'purge_after' => $purgeAfter,
                 'updated_at' => now(),
             ]);
+
+        $this->auditLog->record(
+            request()->user(),
+            'subject.archived',
+            'subjects',
+            $subject->id,
+            $oldValue,
+            $this->auditPayload($subject->fresh()) + ['archived_questions_count' => $subject->questions()->where('status', 'archived')->count()],
+            'Ders ve bagli sorular arsive tasindi.',
+            request()
+        );
 
         return redirect()
             ->route('admin.archive.index')
@@ -159,5 +198,16 @@ class SubjectController extends Controller
         }
 
         return $slug;
+    }
+
+    private function auditPayload(Subject $subject): array
+    {
+        return [
+            'name' => $subject->name,
+            'slug' => $subject->slug,
+            'is_active' => (bool) $subject->is_active,
+            'archived_at' => $subject->archived_at?->toISOString(),
+            'purge_after' => $subject->purge_after?->toISOString(),
+        ];
     }
 }

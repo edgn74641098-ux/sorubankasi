@@ -62,6 +62,7 @@ Route::middleware(['auth', 'verified', 'role:admin,editor'])
 
         Route::resource('questions', AdminQuestionController::class)
             ->except(['show']);
+        Route::post('questions/archive-bulk', [AdminQuestionController::class, 'archiveBulk'])->name('questions.archive-bulk');
         Route::get('questions/{question}/versions', [QuestionVersionController::class, 'index'])->name('questions.versions.index');
         Route::post('questions/{question}/versions/{version}/rollback', [QuestionVersionController::class, 'rollback'])->name('questions.versions.rollback');
 
@@ -115,6 +116,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/questions/submit', [UserSubmittedQuestionController::class, 'create'])->name('questions.create');
     Route::post('/questions/submit', [UserSubmittedQuestionController::class, 'store'])->name('questions.store');
     Route::get('/questions/my-submissions', [UserSubmittedQuestionController::class, 'myQuestions'])->name('questions.submitted');
+    Route::post('/questions/{question}/report-unnecessary', [UserSubmittedQuestionController::class, 'reportUnnecessary'])->name('questions.report-unnecessary');
     Route::post('/questions/report', [QuestionReportController::class, 'store'])->name('questions.report');
     Route::get('/questions/my-reports', [QuestionReportController::class, 'myReports'])->name('questions.reports');
 });

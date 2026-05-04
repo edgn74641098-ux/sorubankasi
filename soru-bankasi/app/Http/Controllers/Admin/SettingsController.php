@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Services\AuditLogService;
 use App\Services\SettingsService;
 use Illuminate\Http\RedirectResponse;
@@ -21,10 +22,11 @@ class SettingsController extends Controller
     public function index(): View
     {
         $definitions = $this->definitions();
+        $this->ensureSettingsExist($definitions);
 
         return view('admin.settings.index', [
             'groups' => collect($definitions)
-                ->groupBy('group')
+                ->groupBy('group', preserveKeys: true)
                 ->map(fn ($items) => $items->mapWithKeys(fn (array $definition, string $key) => [
                     $key => array_merge($definition, [
                         'value' => $this->settings->get($key, $definition['default']),
@@ -37,6 +39,8 @@ class SettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        $this->ensureSettingsExist($this->definitions());
+
         $validated = $request->validate($this->rules());
 
         $oldValues = [];
@@ -81,6 +85,7 @@ class SettingsController extends Controller
             'inactive_login_message' => ['required', 'string', 'min:10', 'max:500'],
             'email_verification_required' => ['required', 'boolean'],
             'google_auth_enabled' => ['required', 'boolean'],
+            'password_reset_enabled' => ['required', 'boolean'],
             'daily_test_limit' => ['required', 'integer', 'between:1,100'],
             'daily_question_limit' => ['required', 'integer', 'between:1,100'],
             'login_rate_limit' => ['required', 'integer', 'between:1,20'],
@@ -113,8 +118,9 @@ class SettingsController extends Controller
 
             'registration_open' => ['group' => 'auth', 'label' => 'Yeni kullanici kaydi', 'type' => 'boolean', 'default' => true],
             'inactive_login_message' => ['group' => 'auth', 'label' => 'Pasif kullanici giris mesaji', 'type' => 'text', 'default' => 'Kullanici hesabiniz pasif duruma getirilmistir. Lutfen yonetici ile iletisime gecin.'],
-            'email_verification_required' => ['group' => 'auth', 'label' => 'E-posta dogrulama zorunlu', 'type' => 'boolean', 'default' => true],
-            'google_auth_enabled' => ['group' => 'auth', 'label' => 'Google ile giris', 'type' => 'boolean', 'default' => true],
+            'email_verification_required' => ['group' => 'auth', 'label' => 'E-posta dogrulama zorunlu', 'type' => 'boolean', 'default' => false],
+            'google_auth_enabled' => ['group' => 'auth', 'label' => 'Google ile giris', 'type' => 'boolean', 'default' => false],
+            'password_reset_enabled' => ['group' => 'auth', 'label' => 'Sifremi unuttum linki', 'type' => 'boolean', 'default' => false],
             'login_rate_limit' => ['group' => 'auth', 'label' => 'Login deneme limiti', 'type' => 'integer', 'default' => 5],
             'login_lockout_duration' => ['group' => 'auth', 'label' => 'Login kilit suresi (sn)', 'type' => 'integer', 'default' => 900],
 
@@ -152,6 +158,18 @@ class SettingsController extends Controller
             'archive' => 'Arsiv ve Silme',
             'system' => 'Sistem',
         ];
+    }
+
+    private function ensureSettingsExist(array $definitions): void
+    {
+        $existingKeys = Setting::query()
+            ->whereIn('key', array_keys($definitions))
+            ->pluck('key')
+            ->all();
+
+        foreach (array_diff(array_keys($definitions), $existingKeys) as $key) {
+            $this->settings->set($key, $definitions[$key]['default']);
+        }
     }
 
     private function castValue(mixed $value, string $type): mixed

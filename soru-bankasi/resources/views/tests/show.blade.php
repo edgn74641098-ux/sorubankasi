@@ -16,6 +16,10 @@
                     <div class="alert alert-info">{{ session('info') }}</div>
                 @endif
 
+                @if ($errors->any())
+                    <div class="alert alert-danger">{{ $errors->first() }}</div>
+                @endif
+
                 <div class="card sb-sticky-toolbar mb-3">
                     <div class="card-body py-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
                         <div class="fw-semibold">Soru {{ $currentIndex }} / {{ $totalItems }}</div>
@@ -43,8 +47,8 @@
                         <div class="text-muted small mb-3">Geri bildirim modu: {{ $test->feedback_mode }}</div>
                         <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
                             <h2 class="h5 fw-bold mb-0">{{ $item->question->question_text }}</h2>
-                            <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reportModal" title="Bu soruyu itiraz et">
-                                ⚠️ İtiraz
+                            <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reportModal" title="Bu soruya itiraz et">
+                                Itiraz
                             </button>
                         </div>
 
@@ -96,45 +100,50 @@
     <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title h5" id="reportModalLabel">Soru İtirazi</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
-                </div>
+                <form method="POST" action="{{ route('questions.report') }}">
+                    @csrf
+                    <input type="hidden" name="question_id" value="{{ $item->question_id }}">
 
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="reportCategory" class="form-label">Kategori</label>
-                        <select id="reportCategory" class="form-select" required>
-                            <option value="WRONG_ANSWER">Yanlış cevap</option>
-                            <option value="UNCLEAR_WORDING">İfade belirsiz</option>
-                            <option value="TYPO">Yazım hatası</option>
-                            <option value="OTHER">Diğer</option>
-                        </select>
+                    <div class="modal-header">
+                        <h2 class="modal-title h5" id="reportModalLabel">Soru Itirazi</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="suggestedCorrectOption" class="form-label">Dogru sik oneriniz</label>
-                        <select id="suggestedCorrectOption" class="form-select" required>
-                            @foreach(['A', 'B', 'C', 'D', 'E'] as $option)
-                                @php($field = 'option_' . strtolower($option))
-                                <option value="{{ $option }}" @selected(($item->user_answer ?: $item->question->correct_option) === $option)>
-                                    {{ $option }} - {{ \Illuminate\Support\Str::limit($item->question->{$field}, 55) }}
-                                </option>
-                            @endforeach
-                        </select>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="reportCategory" class="form-label">Kategori</label>
+                            <select id="reportCategory" name="category" class="form-select" required>
+                                <option value="WRONG_ANSWER">Yanlis cevap</option>
+                                <option value="UNCLEAR_WORDING">Ifade belirsiz</option>
+                                <option value="TYPO">Yazim hatasi</option>
+                                <option value="OTHER">Diger</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="suggestedCorrectOption" class="form-label">Dogru sik oneriniz</label>
+                            <select id="suggestedCorrectOption" name="suggested_correct_option" class="form-select" required>
+                                @foreach(['A', 'B', 'C', 'D', 'E'] as $option)
+                                    @php($field = 'option_' . strtolower($option))
+                                    <option value="{{ $option }}" @selected(($item->user_answer ?: $item->question->correct_option) === $option)>
+                                        {{ $option }} - {{ \Illuminate\Support\Str::limit($item->question->{$field}, 55) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="reportNote" class="form-label">Not</label>
+                            <textarea id="reportNote" name="note" rows="4" maxlength="500" class="form-control" placeholder="Sorunun neden itiraz edildigini aciklayin..."></textarea>
+                            <div class="form-text small mt-1"><span id="charCount">0</span>/500</div>
+                        </div>
                     </div>
 
-                    <div>
-                        <label for="reportNote" class="form-label">Not</label>
-                        <textarea id="reportNote" rows="4" maxlength="500" class="form-control" placeholder="Sorunun neden itiraz edildiğini açıklayın..."></textarea>
-                        <div class="form-text small mt-1"><span id="charCount">0</span>/500</div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                        <button type="submit" class="btn btn-warning">Gonder</button>
                     </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgeç</button>
-                    <button type="button" id="submitReport" class="btn btn-warning">Gönder</button>
-                </div>
+                </form>
             </div>
         </div>
     </div>
@@ -186,67 +195,11 @@
             renderTimer();
         }, 1000);
 
-        // Question Report Modal Handler
-        const reportModal = document.getElementById('reportModal');
-        const categorySelect = document.getElementById('reportCategory');
-        const suggestedCorrectOptionSelect = document.getElementById('suggestedCorrectOption');
         const noteTextarea = document.getElementById('reportNote');
         const charCount = document.getElementById('charCount');
-        const submitBtn = document.getElementById('submitReport');
 
         noteTextarea.addEventListener('input', () => {
             charCount.textContent = noteTextarea.value.length;
-        });
-
-        submitBtn.addEventListener('click', async () => {
-            const category = categorySelect.value;
-            const note = noteTextarea.value;
-
-            if (!category) {
-                alert('Lütfen bir kategori seçin.');
-                return;
-            }
-
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gönderiliyor...';
-
-            try {
-                const response = await fetch('/api/reports', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                    },
-                    body: JSON.stringify({
-                        question_id: {{ $item->question_id }},
-                        category: category,
-                        suggested_correct_option: suggestedCorrectOptionSelect.value,
-                        note: note || null,
-                    }),
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    alert('İtirazınız başarıyla gönderildi. Teşekkürler!');
-                    // Modal'ı kapat
-                    const modal = bootstrap.Modal.getInstance(reportModal);
-                    modal.hide();
-                    // Formu sıfırla
-                    categorySelect.value = 'WRONG_ANSWER';
-                    suggestedCorrectOptionSelect.value = '{{ $item->user_answer ?: $item->question->correct_option }}';
-                    noteTextarea.value = '';
-                    charCount.textContent = '0';
-                } else {
-                    alert(data.message || 'Bir hata oluştu. Lütfen tekrar deneyin.');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Ağ hatası. Lütfen tekrar deneyin.');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = 'Gönder';
-            }
         });
     </script>
 </x-app-layout>

@@ -13,6 +13,8 @@ class UserSubmittedQuestion extends Model
     protected $fillable = [
         'user_id',
         'subject_id',
+        'submission_type',
+        'reported_question_id',
         'payload_json',
         'status',
         'approved_question_id',
@@ -44,5 +46,15 @@ class UserSubmittedQuestion extends Model
     public function approvedQuestion(): BelongsTo
     {
         return $this->belongsTo(Question::class, 'approved_question_id');
+    }
+
+    public function reportedQuestion(): BelongsTo
+    {
+        return $this->belongsTo(Question::class, 'reported_question_id');
+    }
+
+    public function isUnnecessaryQuestionReport(): bool
+    {
+        return $this->submission_type === 'unnecessary_question_report';
     }
 }
