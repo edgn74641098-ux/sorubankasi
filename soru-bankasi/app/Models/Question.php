@@ -29,12 +29,16 @@ class Question extends Model
         'wrong_count',
         'status',
         'approved_at',
+        'archived_at',
+        'purge_after',
         'current_version',
     ];
 
     protected $casts = [
         'difficulty_score' => 'decimal:1',
         'approved_at' => 'datetime',
+        'archived_at' => 'datetime',
+        'purge_after' => 'datetime',
     ];
 
     public function subject(): BelongsTo
@@ -75,5 +79,15 @@ class Question extends Model
     public function importRows(): HasMany
     {
         return $this->hasMany(QuestionImportRow::class, 'matched_question_id');
+    }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(QuestionReport::class);
+    }
+
+    public function difficultyRatings(): HasMany
+    {
+        return $this->hasMany(QuestionDifficultyRating::class);
     }
 }

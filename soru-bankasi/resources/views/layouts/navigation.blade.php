@@ -26,13 +26,13 @@
                     <a class="nav-link {{ request()->routeIs('subjects.*') ? 'active fw-semibold' : '' }}" href="{{ route('subjects.index') }}">Dersler</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('tests.*') ? 'active fw-semibold' : '' }}" href="{{ route('tests.create') }}">Testler</a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('leaderboard.*') ? 'active fw-semibold' : '' }}" href="{{ route('leaderboard.index') }}">Leaderboard</a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {{ request()->routeIs('questions.*') ? 'active fw-semibold' : '' }}" href="{{ route('questions.submitted') }}">Onerilerim</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ request()->routeIs('questions.reports') ? 'active fw-semibold' : '' }}" href="{{ route('questions.reports') }}">Itirazlarim</a>
                 </li>
                 @if(Auth::user()->isAdmin() || Auth::user()->isEditor())
                     <li class="nav-item">

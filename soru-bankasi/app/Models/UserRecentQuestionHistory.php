@@ -16,6 +16,9 @@ class UserRecentQuestionHistory extends Model
         'user_id',
         'question_id',
         'last_answered_at',
+        'attempt_count',
+        'correct_count',
+        'wrong_count',
     ];
 
     protected $casts = [

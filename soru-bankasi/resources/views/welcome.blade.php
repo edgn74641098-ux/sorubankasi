@@ -44,7 +44,7 @@
 
                     <div class="sb-hero-actions">
                         @auth
-                            <a href="{{ route('tests.create') }}" class="sb-btn sb-btn-primary">Test Baslat</a>
+                            <a href="{{ route('subjects.index') }}" class="sb-btn sb-btn-primary">Test Baslat</a>
                             <a href="{{ route('subjects.index') }}" class="sb-btn sb-btn-secondary">Dersleri Gor</a>
                         @else
                             <a href="{{ route('login') }}" class="sb-btn sb-btn-primary">Giris Yap</a>

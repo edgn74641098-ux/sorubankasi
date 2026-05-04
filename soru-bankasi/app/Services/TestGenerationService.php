@@ -8,7 +8,7 @@ use App\Models\Test;
 use App\Models\TestItem;
 use App\Models\User;
 use App\Models\UserWrongQuestionStat;
-use Illuminate\Database\Eloquent\Collection;
+use App\Models\UserRecentQuestionHistory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -18,6 +18,12 @@ class TestGenerationService
     public const QUESTION_COUNT = 20;
 
     public const DURATION_MINUTES = 30;
+
+    private const MASTERED_MIN_ATTEMPTS = 5;
+
+    private const MASTERED_MIN_ACCURACY = 0.8;
+
+    private const MASTERED_MAX_RATIO_IN_TEST = 0.2;
 
     public function __construct(
         private readonly SettingsService $settingsService
@@ -29,8 +35,8 @@ class TestGenerationService
         $this->ensureCanStart($user, $subject);
 
         $selection = match ($mode) {
-            'RANDOM' => $this->randomQuestions($subject),
-            'DIFFICULTY_RANGE' => $this->difficultyRangeQuestions($subject, $parameters),
+            'RANDOM' => $this->randomQuestions($user, $subject),
+            'DIFFICULTY_RANGE' => $this->difficultyRangeQuestions($user, $subject, $parameters),
             'WEAKNESSES' => $this->weaknessQuestions($user, $subject),
             default => throw $this->httpException(422, 'invalid_mode', 'Geçersiz test modu.'),
         };
@@ -65,9 +71,23 @@ class TestGenerationService
             return $test->load(['subject', 'items.question']);
         });
 
+        // Check for soft limit warnings
+        $dailyLimit = $this->settingsService->getInt('daily_test_limit', 20);
+        $todayTestCount = Test::query()
+            ->where('user_id', $user->id)
+            ->whereDate('created_at', now()->toDateString())
+            ->count();
+
+        $message = $selection['message'];
+        if ($todayTestCount >= $dailyLimit) {
+            $message = 'Bugun son test hakkinizi kullandiniz.' . ($message ? ' ' . $message : '');
+        } elseif ($todayTestCount >= max(10, (int) floor($dailyLimit / 2))) {
+            $message = 'Bugun cok sayida test cozdunuz.' . ($message ? ' ' . $message : '');
+        }
+
         return [
             'test' => $test,
-            'message' => $selection['message'],
+            'message' => $message,
         ];
     }
 
@@ -106,18 +126,15 @@ class TestGenerationService
         }
     }
 
-    private function randomQuestions(Subject $subject): array
+    private function randomQuestions(User $user, Subject $subject): array
     {
         return [
-            'questions' => $this->baseSubjectQuestionQuery($subject)
-                ->inRandomOrder()
-                ->limit(self::QUESTION_COUNT)
-                ->get(),
+            'questions' => $this->balancedQuestionSelection($user, $subject),
             'message' => null,
         ];
     }
 
-    private function difficultyRangeQuestions(Subject $subject, array $parameters): array
+    private function difficultyRangeQuestions(User $user, Subject $subject, array $parameters): array
     {
         $min = max(1, (int) ($parameters['min_difficulty'] ?? 1));
         $max = min(10, (int) ($parameters['max_difficulty'] ?? 10));
@@ -126,11 +143,11 @@ class TestGenerationService
             throw $this->httpException(422, 'invalid_difficulty_range', 'Zorluk aralığı geçersiz.');
         }
 
-        $questions = $this->baseSubjectQuestionQuery($subject)
-            ->whereBetween('difficulty_score', [$min, $max])
-            ->inRandomOrder()
-            ->limit(self::QUESTION_COUNT)
-            ->get();
+        $questions = $this->balancedQuestionSelection(
+            $user,
+            $subject,
+            fn ($query) => $query->whereBetween('difficulty_score', [$min, $max])
+        );
 
         if ($questions->count() >= self::QUESTION_COUNT) {
             return [
@@ -141,16 +158,89 @@ class TestGenerationService
 
         $missing = self::QUESTION_COUNT - $questions->count();
 
-        $additional = $this->baseSubjectQuestionQuery($subject)
-            ->whereNotIn('id', $questions->pluck('id'))
-            ->inRandomOrder()
-            ->limit($missing)
-            ->get();
+        $additional = $this->balancedQuestionSelection(
+            $user,
+            $subject,
+            fn ($query) => $query->whereNotIn('id', $questions->pluck('id')),
+            $missing
+        );
 
         return [
             'questions' => $questions->concat($additional)->values(),
             'message' => 'Zorluk aralığındaki sorular yetmediği için test ders havuzundan tamamlandı.',
         ];
+    }
+
+    private function balancedQuestionSelection(
+        User $user,
+        Subject $subject,
+        ?callable $scope = null,
+        int $limit = self::QUESTION_COUNT
+    ) {
+        $masteredQuestionIds = $this->masteredQuestionIds($user, $subject);
+        $maxMasteredQuestions = (int) floor($limit * self::MASTERED_MAX_RATIO_IN_TEST);
+
+        $buildQuery = function () use ($subject, $scope) {
+            $query = $this->baseSubjectQuestionQuery($subject);
+
+            if ($scope !== null) {
+                $scope($query);
+            }
+
+            return $query;
+        };
+
+        $regularQuestions = $buildQuery()
+            ->when($masteredQuestionIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $masteredQuestionIds))
+            ->inRandomOrder()
+            ->limit($limit)
+            ->get();
+
+        if ($regularQuestions->count() >= $limit) {
+            return $regularQuestions;
+        }
+
+        $selected = $regularQuestions;
+        $remaining = $limit - $selected->count();
+        $masteredLimit = max(0, min($maxMasteredQuestions, $remaining));
+
+        if ($masteredLimit > 0 && $masteredQuestionIds->isNotEmpty()) {
+            $masteredQuestions = $buildQuery()
+                ->whereIn('id', $masteredQuestionIds)
+                ->whereNotIn('id', $selected->pluck('id'))
+                ->inRandomOrder()
+                ->limit($masteredLimit)
+                ->get();
+
+            $selected = $selected->concat($masteredQuestions)->unique('id')->values();
+        }
+
+        if ($selected->count() >= $limit) {
+            return $selected;
+        }
+
+        return $selected
+            ->concat(
+                $buildQuery()
+                    ->whereNotIn('id', $selected->pluck('id'))
+                    ->inRandomOrder()
+                    ->limit($limit - $selected->count())
+                    ->get()
+            )
+            ->unique('id')
+            ->values();
+    }
+
+    private function masteredQuestionIds(User $user, Subject $subject)
+    {
+        return UserRecentQuestionHistory::query()
+            ->where('user_id', $user->id)
+            ->whereIn('question_id', $this->baseSubjectQuestionQuery($subject)->select('id'))
+            ->where('attempt_count', '>=', self::MASTERED_MIN_ATTEMPTS)
+            ->whereRaw('correct_count >= (attempt_count * ?)', [self::MASTERED_MIN_ACCURACY])
+            ->pluck('question_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
     }
 
     private function weaknessQuestions(User $user, Subject $subject): array
@@ -160,13 +250,22 @@ class TestGenerationService
         $usedCooldown = 72;
 
         foreach ($cooldowns as $cooldown) {
-            $threshold = Carbon::now()->subHours($cooldown);
+            $exclusionThreshold = Carbon::now()->subHours($cooldown);
 
+            // Get recently answered questions (last_answered_at >= exclusion threshold)
+            // These should be excluded from the weakness pool
+            $recentlyAnsweredIds = UserRecentQuestionHistory::query()
+                ->where('user_id', $user->id)
+                ->where('last_answered_at', '>=', $exclusionThreshold)
+                ->pluck('question_id')
+                ->toArray();
+
+            // Select wrong questions from this subject, excluding recently answered ones
             $selected = $this->baseSubjectQuestionQuery($subject)
                 ->select('questions.*')
                 ->join('user_wrong_question_stats', 'questions.id', '=', 'user_wrong_question_stats.question_id')
                 ->where('user_wrong_question_stats.user_id', $user->id)
-                ->where('user_wrong_question_stats.last_wrong_at', '<=', $threshold)
+                ->whereNotIn('questions.id', $recentlyAnsweredIds)
                 ->orderByDesc('user_wrong_question_stats.wrong_count')
                 ->orderByDesc('user_wrong_question_stats.last_wrong_at')
                 ->limit(self::QUESTION_COUNT)
@@ -182,11 +281,12 @@ class TestGenerationService
         $wrongQuestionIds = $selected->pluck('id');
 
         if ($selected->count() < self::QUESTION_COUNT) {
-            $additional = $this->baseSubjectQuestionQuery($subject)
-                ->whereNotIn('id', $wrongQuestionIds)
-                ->inRandomOrder()
-                ->limit(self::QUESTION_COUNT - $selected->count())
-                ->get();
+            $additional = $this->balancedQuestionSelection(
+                $user,
+                $subject,
+                fn ($query) => $query->whereNotIn('id', $wrongQuestionIds),
+                self::QUESTION_COUNT - $selected->count()
+            );
 
             $selected = $selected->concat($additional)->values();
         }

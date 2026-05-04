@@ -9,7 +9,6 @@ use App\Services\TestFinalizeService;
 use App\Services\TestGenerationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -23,25 +22,12 @@ class TestController extends Controller
     ) {
     }
 
-    public function create(): View
+    public function create(Request $request): RedirectResponse
     {
         $this->authorize('create', Test::class);
-        $this->finalizeService->finalizeExpiredForUser(Auth::id());
+        $this->finalizeService->finalizeExpiredForUser($request->user()->id);
 
-        return view('tests.start', [
-            'subjects' => Subject::query()
-                ->where('is_active', true)
-                ->withCount([
-                    'questions as active_questions_count' => fn ($query) => $query->where('status', 'active'),
-                ])
-                ->orderBy('name')
-                ->get(),
-            'activeTest' => Test::query()
-                ->where('user_id', Auth::id())
-                ->where('status', 'active')
-                ->latest('started_at')
-                ->first(),
-        ]);
+        return redirect()->route('subjects.index', $request->query());
     }
 
     public function start(Request $request): RedirectResponse

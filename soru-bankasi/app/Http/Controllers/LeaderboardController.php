@@ -9,9 +9,14 @@ use App\Models\UserWrongQuestionStat;
 use App\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 
 class LeaderboardController extends Controller
 {
+    private const GLOBAL_PAGE_LIMIT = 20;
+
+    private const HIGHLIGHT_PAGE_LIMIT = 5;
+
     public function __construct(
         private readonly SettingsService $settingsService
     ) {
@@ -24,19 +29,30 @@ class LeaderboardController extends Controller
 
         $globalRows = collect();
         $myGlobalRank = null;
+        $globalLeader = null;
+        $globalPointsToNext = null;
+        $globalAccuracy = null;
 
         if ($globalSnapshotAt) {
             $globalRows = LeaderboardGlobalSnapshot::query()
                 ->with('user:id,name')
                 ->where('snapshot_at', $globalSnapshotAt)
                 ->orderBy('rank')
-                ->limit(100)
+                ->limit(self::GLOBAL_PAGE_LIMIT)
                 ->get();
 
             $myGlobalRank = LeaderboardGlobalSnapshot::query()
                 ->where('snapshot_at', $globalSnapshotAt)
                 ->where('user_id', auth()->id())
                 ->first();
+
+            $globalLeader = $globalRows->first();
+
+            if ($myGlobalRank) {
+                $above = $globalRows->firstWhere('rank', $myGlobalRank->rank - 1);
+                $globalPointsToNext = $above ? max(0, (int) $above->score - (int) $myGlobalRank->score + 1) : 0;
+                $globalAccuracy = $this->accuracy((int) $myGlobalRank->correct_total, (int) $myGlobalRank->questions_total);
+            }
         }
 
         $subjects = Subject::query()
@@ -52,6 +68,9 @@ class LeaderboardController extends Controller
         $subjectSnapshotAt = null;
         $subjectRows = collect();
         $mySubjectRank = null;
+        $subjectLeader = null;
+        $subjectPointsToNext = null;
+        $subjectAccuracy = null;
         $wrongQuestionCount = 0;
 
         if ($selectedSubjectId) {
@@ -81,6 +100,14 @@ class LeaderboardController extends Controller
                     ->where('snapshot_at', $subjectSnapshotAt)
                     ->where('user_id', auth()->id())
                     ->first();
+
+                $subjectLeader = $subjectRows->first();
+
+                if ($mySubjectRank) {
+                    $above = $subjectRows->firstWhere('rank', $mySubjectRank->rank - 1);
+                    $subjectPointsToNext = $above ? max(0, (int) $above->score - (int) $mySubjectRank->score + 1) : 0;
+                    $subjectAccuracy = $this->accuracy((int) $mySubjectRank->correct_total, (int) $mySubjectRank->questions_total);
+                }
             }
         }
 
@@ -93,10 +120,54 @@ class LeaderboardController extends Controller
             'subjectRows' => $subjectRows,
             'myGlobalRank' => $myGlobalRank,
             'mySubjectRank' => $mySubjectRank,
+            'globalLeader' => $globalLeader,
+            'subjectLeader' => $subjectLeader,
+            'globalPointsToNext' => $globalPointsToNext,
+            'subjectPointsToNext' => $subjectPointsToNext,
+            'globalAccuracy' => $globalAccuracy,
+            'subjectAccuracy' => $subjectAccuracy,
             'wrongQuestionCount' => $wrongQuestionCount,
             'leaderboardMinTests' => $leaderboardMinTests,
             'leaderboardWindowDays' => 30,
+            'weeklyLeaders' => $this->weeklyLeaders(),
+            'mostImprovedRows' => $this->mostImprovedRows(),
         ]);
+    }
+
+    private function weeklyLeaders()
+    {
+        return DB::table('tests')
+            ->join('users', 'users.id', '=', 'tests.user_id')
+            ->selectRaw('users.id, users.name, COALESCE(SUM(tests.score), 0) as score_total, COUNT(*) as test_count')
+            ->where('tests.status', 'finished')
+            ->where('tests.ended_at', '>=', now()->subDays(7))
+            ->groupBy('users.id', 'users.name')
+            ->orderByDesc('score_total')
+            ->limit(self::HIGHLIGHT_PAGE_LIMIT)
+            ->get();
+    }
+
+    private function mostImprovedRows()
+    {
+        return DB::table('tests')
+            ->join('users', 'users.id', '=', 'tests.user_id')
+            ->selectRaw('users.id, users.name, COUNT(*) as test_count, COALESCE(SUM(tests.score), 0) as score_total, COALESCE(AVG(tests.score), 0) as average_score')
+            ->where('tests.status', 'finished')
+            ->where('tests.ended_at', '>=', now()->subDays(7))
+            ->groupBy('users.id', 'users.name')
+            ->having('test_count', '>=', 2)
+            ->orderByDesc('average_score')
+            ->limit(self::HIGHLIGHT_PAGE_LIMIT)
+            ->get();
+    }
+
+    private function accuracy(int $correct, int $total): ?float
+    {
+        if ($total <= 0) {
+            return null;
+        }
+
+        return round(($correct / $total) * 100, 1);
     }
 
     public function apiIndex(): JsonResponse

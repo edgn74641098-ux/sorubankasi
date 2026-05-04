@@ -25,8 +25,12 @@ class QuestionController extends Controller
 
         $questions = Question::query()
             ->with(['subject:id,name', 'createdBy:id,name'])
+            ->where('status', '!=', 'archived')
             ->when($request->filled('subject_id'), fn ($query) => $query->where('subject_id', $request->integer('subject_id')))
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
+            ->when(
+                in_array($request->string('status')->value(), array_keys($this->statusOptions()), true),
+                fn ($query) => $query->where('status', $request->string('status')->value())
+            )
             ->when($request->filled('search'), fn ($query) => $query->where('question_text', 'like', '%' . $request->string('search')->value() . '%'))
             ->latest()
             ->paginate(20)
@@ -75,10 +79,12 @@ class QuestionController extends Controller
             'correct_option' => $validated['correct_option'],
             'explanation_text' => $validated['explanation'],
             'difficulty_score' => $validated['difficulty_score'],
-            'status' => $validated['status'],
-            'approved_at' => $statusMeta['approved_at'],
-            'current_version' => 1,
-        ]);
+                'status' => $validated['status'],
+                'approved_at' => $statusMeta['approved_at'],
+                'archived_at' => null,
+                'purge_after' => null,
+                'current_version' => 1,
+            ]);
 
         return redirect()
             ->route('admin.questions.index')
@@ -129,6 +135,8 @@ class QuestionController extends Controller
                 'difficulty_score' => $validated['difficulty_score'],
                 'status' => $validated['status'],
                 'approved_at' => $statusMeta['approved_at'],
+                'archived_at' => $validated['status'] === 'archived' ? ($question->archived_at ?: now()) : null,
+                'purge_after' => $validated['status'] === 'archived' ? ($question->purge_after ?: now()->addDays(7)) : null,
                 'current_version' => $currentVersion + 1,
             ]);
         });
@@ -154,16 +162,18 @@ class QuestionController extends Controller
             ]);
 
             $question->update([
-                'status' => 'inactive',
+                'status' => 'archived',
                 'approved_by' => null,
                 'approved_at' => null,
+                'archived_at' => now(),
+                'purge_after' => now()->addDays(7),
                 'current_version' => $currentVersion + 1,
             ]);
         });
 
         return redirect()
-            ->route('admin.questions.index')
-            ->with('success', 'Soru pasif duruma alindi.');
+            ->route('admin.archive.index')
+            ->with('success', 'Soru arsive tasindi. 7 gun sonra otomatik silme icin isaretlendi.');
     }
 
     private function availableSubjects()

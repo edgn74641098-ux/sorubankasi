@@ -11,6 +11,11 @@ use Illuminate\Support\Facades\DB;
 
 class TestFinalizeService
 {
+    public function __construct(
+        private readonly DifficultyCalculationService $difficultyService
+    ) {
+    }
+
     public function finalize(Test $test): Test
     {
         if ($test->status === 'finished') {
@@ -75,6 +80,9 @@ class TestFinalizeService
                     $item->question->increment('wrong_count');
                 }
 
+                // Update difficulty score after count changes
+                $this->difficultyService->updateDifficultyScore($item->question);
+
                 if (! $isCorrect && ! $isBlank) {
                     $wrongStat = UserWrongQuestionStat::query()->firstOrNew([
                         'user_id' => $test->user_id,
@@ -92,6 +100,14 @@ class TestFinalizeService
                 ]);
 
                 $recentHistory->last_answered_at = Carbon::now();
+                $recentHistory->attempt_count = (int) $recentHistory->attempt_count + 1;
+
+                if ($isCorrect) {
+                    $recentHistory->correct_count = (int) $recentHistory->correct_count + 1;
+                } elseif (! $isBlank) {
+                    $recentHistory->wrong_count = (int) $recentHistory->wrong_count + 1;
+                }
+
                 $recentHistory->save();
             }
 

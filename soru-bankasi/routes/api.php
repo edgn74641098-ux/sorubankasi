@@ -5,6 +5,7 @@ use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserSubmittedQuestionController;
+use App\Http\Controllers\QuestionReportController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -57,5 +58,13 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::prefix('questions')->group(function () {
         Route::get('/submissions', [UserSubmittedQuestionController::class, 'apiMySubmissions'])->name('api.questions.submissions');
         Route::post('/submit', [UserSubmittedQuestionController::class, 'apiStore'])->name('api.questions.store');
+    });
+
+    // Question Reports (Disputes)
+    Route::prefix('reports')->group(function () {
+        Route::get('/mine', [QuestionReportController::class, 'apiMine'])->name('api.reports.mine');
+        Route::post('/', [QuestionReportController::class, 'apiStore'])->name('api.reports.store');
+        Route::get('/pending', [QuestionReportController::class, 'apiPending'])->name('api.reports.pending');
+        Route::post('/{report}/review', [QuestionReportController::class, 'apiApprove'])->name('api.reports.review');
     });
 });

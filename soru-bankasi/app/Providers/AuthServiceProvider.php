@@ -3,10 +3,12 @@
 namespace App\Providers;
 
 use App\Models\Question;
+use App\Models\QuestionReport;
 use App\Models\Subject;
 use App\Models\Test;
 use App\Models\UserSubmittedQuestion;
 use App\Policies\QuestionPolicy;
+use App\Policies\QuestionReportPolicy;
 use App\Policies\SubjectPolicy;
 use App\Policies\TestPolicy;
 use App\Policies\UserSubmittedQuestionPolicy;
@@ -22,6 +24,7 @@ class AuthServiceProvider extends ServiceProvider
      */
     protected $policies = [
         Question::class => QuestionPolicy::class,
+        QuestionReport::class => QuestionReportPolicy::class,
         Subject::class => SubjectPolicy::class,
         Test::class => TestPolicy::class,
         UserSubmittedQuestion::class => UserSubmittedQuestionPolicy::class,

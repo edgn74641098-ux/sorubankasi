@@ -14,10 +14,14 @@ class Subject extends Model
         'name',
         'slug',
         'is_active',
+        'archived_at',
+        'purge_after',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'archived_at' => 'datetime',
+        'purge_after' => 'datetime',
     ];
 
     public function questions(): HasMany

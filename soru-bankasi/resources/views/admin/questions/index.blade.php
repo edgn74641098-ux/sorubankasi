@@ -1,10 +1,10 @@
-@extends('layouts.admin', ['pageTitle' => 'Soru Yönetimi', 'title' => 'Soru Yönetimi'])
+@extends('layouts.admin', ['pageTitle' => 'Soru Yonetimi', 'title' => 'Soru Yonetimi'])
 
 @section('content')
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-1">Sorular</h1>
-            <p class="text-muted mb-0">Soru havuzunu filtreleyin, arayın ve yönetin.</p>
+            <p class="text-muted mb-0">Soru havuzunu filtreleyin ve yonetin. Arsivlenen sorular ayri Arsiv bolumunde izlenir.</p>
         </div>
         <a href="{{ route('admin.questions.create') }}" class="btn btn-primary">Yeni Soru Ekle</a>
     </div>
@@ -15,7 +15,7 @@
                 <div class="col-md-3">
                     <label for="subject_id" class="form-label">Ders</label>
                     <select name="subject_id" id="subject_id" class="form-select">
-                        <option value="">Tüm Dersler</option>
+                        <option value="">Tum Dersler</option>
                         @foreach($subjects as $subject)
                             <option value="{{ $subject->id }}" @selected((string) $filters['subject_id'] === (string) $subject->id)>{{ $subject->name }}</option>
                         @endforeach
@@ -41,7 +41,7 @@
             </form>
 
             @if($questions->isEmpty())
-                <div class="alert alert-info mb-0">Filtrelere uygun soru bulunamadı.</div>
+                <div class="alert alert-info mb-0">Filtrelere uygun soru bulunamadi.</div>
             @else
                 <div class="table-responsive">
                     <table class="table align-middle">
@@ -52,7 +52,7 @@
                                 <th>Zorluk</th>
                                 <th>Durum</th>
                                 <th>Versiyon</th>
-                                <th class="text-end">İşlemler</th>
+                                <th class="text-end">Islemler</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -68,14 +68,14 @@
                                     </td>
                                     <td>v{{ $question->current_version }}</td>
                                     <td class="text-end">
-                                        <a href="{{ route('admin.questions.edit', $question) }}" class="btn btn-sm btn-outline-primary">Düzenle</a>
+                                        <a href="{{ route('admin.questions.edit', $question) }}" class="btn btn-sm btn-outline-primary">Duzenle</a>
                                         <a href="{{ route('admin.questions.versions.index', $question) }}" class="btn btn-sm btn-outline-secondary">Surumler</a>
 
                                         @can('delete', $question)
                                             <form method="POST" action="{{ route('admin.questions.destroy', $question) }}" class="d-inline">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu soruyu pasif yapmak istediğinize emin misiniz?')">Pasif Yap</button>
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu soruyu arsive tasimak istediginize emin misiniz?')">Arsive Tasi</button>
                                             </form>
                                         @endcan
                                     </td>

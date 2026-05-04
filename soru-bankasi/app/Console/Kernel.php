@@ -15,6 +15,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('leaderboard:snapshot')->everyFiveMinutes();
         $schedule->command('queue:work --once --max-jobs=10')->everyFiveMinutes();
+        $schedule->command('archive:prune')->dailyAt('02:10');
         $schedule->command('cleanup:audit-logs --days=90')->dailyAt('02:00');
         $schedule->command('backup:database')
             ->dailyAt('03:00')

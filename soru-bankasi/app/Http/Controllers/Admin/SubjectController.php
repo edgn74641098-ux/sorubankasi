@@ -19,6 +19,7 @@ class SubjectController extends Controller
 
         $subjects = Subject::query()
             ->withCount('questions')
+            ->whereNull('archived_at')
             ->when($status === 'active', fn ($query) => $query->where('is_active', true))
             ->when($status === 'inactive', fn ($query) => $query->where('is_active', false))
             ->orderBy('name')
@@ -79,6 +80,8 @@ class SubjectController extends Controller
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($validated['name'], $subject->id),
             'is_active' => (bool) $validated['is_active'],
+            'archived_at' => null,
+            'purge_after' => null,
         ]);
 
         return redirect()
@@ -90,13 +93,28 @@ class SubjectController extends Controller
     {
         $this->authorize('delete', $subject);
 
+        $archiveAt = now();
+
         $subject->update([
             'is_active' => false,
+            'archived_at' => $archiveAt,
+            'purge_after' => $archiveAt->copy()->addDays(7),
         ]);
 
+        $subject->questions()
+            ->whereNull('archived_at')
+            ->update([
+                'status' => 'archived',
+                'approved_by' => null,
+                'approved_at' => null,
+                'archived_at' => $archiveAt,
+                'purge_after' => $archiveAt->copy()->addDays(7),
+                'updated_at' => now(),
+            ]);
+
         return redirect()
-            ->route('admin.subjects.index')
-            ->with('success', 'Ders pasif duruma alindi.');
+            ->route('admin.archive.index')
+            ->with('success', 'Ders arsive tasindi. 7 gun sonra otomatik silme icin isaretlendi.');
     }
 
     private function generateUniqueSlug(string $name, ?int $ignoreId = null): string

@@ -161,13 +161,409 @@ class AdminManagementTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->from(route('tests.create'))
+            ->from(route('subjects.index'))
             ->post(route('tests.start'), [
                 'subject_id' => $subject->id,
                 'mode' => 'RANDOM',
             ])
-            ->assertRedirect(route('tests.create'))
+            ->assertRedirect(route('subjects.index'))
             ->assertSessionHasErrors('test');
+    }
+
+    public function test_admin_can_archive_subject_and_its_questions(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create(['is_active' => true]);
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => $admin->id,
+            'status' => 'active',
+            'approved_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.subjects.destroy', $subject))
+            ->assertRedirect(route('admin.archive.index'));
+
+        $subject->refresh();
+        $question->refresh();
+
+        $this->assertFalse($subject->is_active);
+        $this->assertNotNull($subject->archived_at);
+        $this->assertNotNull($subject->purge_after);
+        $this->assertSame('archived', $question->status);
+        $this->assertNotNull($question->archived_at);
+
+        $this->actingAs($admin)
+            ->get(route('admin.subjects.index'))
+            ->assertOk()
+            ->assertDontSee($subject->name);
+
+        $this->actingAs($admin)
+            ->get(route('admin.archive.index'))
+            ->assertOk()
+            ->assertSee($subject->name)
+            ->assertSee('Otomatik Silme');
+    }
+
+    public function test_admin_can_archive_question(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create(['is_active' => true]);
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => $admin->id,
+            'question_text' => 'Arsive tasinacak soru metni',
+            'status' => 'active',
+            'approved_at' => now(),
+            'current_version' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.questions.destroy', $question))
+            ->assertRedirect(route('admin.archive.index'));
+
+        $question->refresh();
+
+        $this->assertSame('archived', $question->status);
+        $this->assertNotNull($question->archived_at);
+        $this->assertNotNull($question->purge_after);
+        $this->assertSame(2, (int) $question->current_version);
+        $this->assertDatabaseHas('question_versions', [
+            'question_id' => $question->id,
+            'version_no' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.questions.index'))
+            ->assertOk()
+            ->assertDontSee($question->question_text);
+
+        $this->actingAs($admin)
+            ->get(route('admin.archive.index'))
+            ->assertOk()
+            ->assertSee($question->question_text);
+    }
+
+    public function test_archive_prune_deletes_expired_unreferenced_records(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create([
+            'is_active' => false,
+            'archived_at' => now()->subDays(8),
+            'purge_after' => now()->subDay(),
+        ]);
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => null,
+            'status' => 'archived',
+            'archived_at' => now()->subDays(8),
+            'purge_after' => now()->subDay(),
+        ]);
+
+        $this->artisan('archive:prune')
+            ->expectsOutput('Archived cleanup completed. Questions deleted: 1, subjects deleted: 1.')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseMissing('questions', ['id' => $question->id]);
+        $this->assertDatabaseMissing('subjects', ['id' => $subject->id]);
+    }
+
+    public function test_admin_can_view_archive_page_from_panel(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create([
+            'name' => 'Arsiv Dersi',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'question_text' => 'Arsivde gorunen soru metni',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Aksiyon Gerekenler')
+            ->assertSee('24 Saatte Silinecek')
+            ->assertSee(route('admin.archive.index'), false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.archive.index'))
+            ->assertOk()
+            ->assertSee('Arsivlenen Dersler')
+            ->assertSee('Arsiv Dersi')
+            ->assertSee('Arsivlenen Sorular')
+            ->assertSee('Arsivde gorunen soru metni');
+    }
+
+    public function test_admin_search_finds_core_records(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create([
+            'name' => 'Arama Dersi',
+            'is_active' => true,
+        ]);
+        Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'status' => 'active',
+            'question_text' => 'Arama icin benzersiz soru metni',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.search', ['q' => 'Arama']))
+            ->assertOk()
+            ->assertSee('Dersler')
+            ->assertSee('Arama Dersi')
+            ->assertSee('Sorular')
+            ->assertSee('Arama icin benzersiz soru metni');
+    }
+
+    public function test_editor_dashboard_hides_admin_only_audit_link(): void
+    {
+        $editor = $this->createUserWithRole('editor');
+
+        $this->actingAs($editor)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Tekrar hos geldiniz')
+            ->assertDontSee(route('admin.audit-logs.index'), false);
+    }
+
+    public function test_admin_can_filter_archive_records(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $math = Subject::factory()->create([
+            'name' => 'Matematik Arsiv',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        $history = Subject::factory()->create([
+            'name' => 'Tarih Arsiv',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        Question::factory()->create([
+            'subject_id' => $math->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'question_text' => 'Denklem arsiv sorusu',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        Question::factory()->create([
+            'subject_id' => $history->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'question_text' => 'Osmanli arsiv sorusu',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.archive.index', ['subject_search' => 'Matematik']))
+            ->assertOk()
+            ->assertSee('Matematik Arsiv')
+            ->assertSee('<td class="fw-semibold">Matematik Arsiv</td>', false)
+            ->assertDontSee('<td class="fw-semibold">Tarih Arsiv</td>', false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.archive.index', [
+                'question_subject_id' => $history->id,
+                'question_search' => 'Osmanli',
+            ]))
+            ->assertOk()
+            ->assertSee('Osmanli arsiv sorusu')
+            ->assertDontSee('Denklem arsiv sorusu');
+    }
+
+    public function test_admin_can_restore_archived_subject_with_questions(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create([
+            'name' => 'Geri Donen Ders',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'question_text' => 'Dersle geri donen soru',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.archive.subjects.restore', $subject))
+            ->assertRedirect(route('admin.archive.index'));
+
+        $subject->refresh();
+        $question->refresh();
+
+        $this->assertTrue($subject->is_active);
+        $this->assertNull($subject->archived_at);
+        $this->assertNull($subject->purge_after);
+        $this->assertSame('inactive', $question->status);
+        $this->assertNull($question->archived_at);
+        $this->assertNull($question->purge_after);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'archive.subject_restored',
+            'entity_type' => 'subjects',
+            'entity_id' => $subject->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.subjects.index'))
+            ->assertOk()
+            ->assertSee('Geri Donen Ders');
+
+        $this->actingAs($admin)
+            ->get(route('admin.questions.index'))
+            ->assertOk()
+            ->assertSee('Dersle geri donen soru');
+    }
+
+    public function test_admin_can_restore_archived_question(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create([
+            'name' => 'Soru Dersi',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'question_text' => 'Tekil geri alinan soru',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.archive.questions.restore', $question))
+            ->assertRedirect(route('admin.archive.index'));
+
+        $subject->refresh();
+        $question->refresh();
+
+        $this->assertTrue($subject->is_active);
+        $this->assertNull($subject->archived_at);
+        $this->assertSame('inactive', $question->status);
+        $this->assertNull($question->archived_at);
+        $this->assertNull($question->purge_after);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'archive.question_restored',
+            'entity_type' => 'questions',
+            'entity_id' => $question->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.questions.index'))
+            ->assertOk()
+            ->assertSee('Tekil geri alinan soru');
+    }
+
+    public function test_admin_can_bulk_restore_archived_subjects(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subjects = Subject::factory()->count(2)->create([
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $questions = $subjects->map(fn (Subject $subject) => Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]));
+
+        $this->actingAs($admin)
+            ->post(route('admin.archive.subjects.restore-bulk'), [
+                'subject_ids' => $subjects->pluck('id')->all(),
+            ])
+            ->assertRedirect(route('admin.archive.index'));
+
+        foreach ($subjects as $subject) {
+            $subject->refresh();
+            $this->assertTrue($subject->is_active);
+            $this->assertNull($subject->archived_at);
+        }
+
+        foreach ($questions as $question) {
+            $question->refresh();
+            $this->assertSame('inactive', $question->status);
+            $this->assertNull($question->archived_at);
+        }
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'archive.subject_restored_bulk',
+            'entity_type' => 'subjects',
+            'entity_id' => $subjects->first()->id,
+        ]);
+    }
+
+    public function test_admin_can_bulk_restore_archived_questions(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create([
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        $questions = Question::factory()->count(3)->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'status' => 'archived',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.archive.questions.restore-bulk'), [
+                'question_ids' => $questions->take(2)->pluck('id')->all(),
+            ])
+            ->assertRedirect(route('admin.archive.index'));
+
+        $subject->refresh();
+        $this->assertTrue($subject->is_active);
+        $this->assertNull($subject->archived_at);
+
+        foreach ($questions->take(2) as $question) {
+            $question->refresh();
+            $this->assertSame('inactive', $question->status);
+            $this->assertNull($question->archived_at);
+        }
+
+        $remainingQuestion = $questions->last()->fresh();
+        $this->assertSame('archived', $remainingQuestion->status);
+        $this->assertNotNull($remainingQuestion->archived_at);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'archive.question_restored_bulk',
+            'entity_type' => 'questions',
+            'entity_id' => $questions->first()->id,
+        ]);
     }
 
     private function createUserWithRole(string $role): User

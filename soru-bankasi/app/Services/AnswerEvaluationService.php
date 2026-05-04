@@ -35,7 +35,7 @@ class AnswerEvaluationService
             'explanation' => null,
         ];
 
-        if ($mode === 'INSTANT_FEEDBACK_LOCKED' && $testItem->answered_at !== null) {
+        if (($mode === 'INSTANT_FEEDBACK_LOCKED' || $mode === 'NO_FEEDBACK') && $testItem->answered_at !== null) {
             throw $this->httpException(422, 'answer_locked', 'Bu soru için cevap kilitlendi.');
         }
 
@@ -51,6 +51,15 @@ class AnswerEvaluationService
             $payload['locked'] = true;
             $payload['is_correct'] = $isCorrect;
             $payload['explanation'] = $testItem->question->explanation_text;
+        } elseif ($mode === 'NO_FEEDBACK') {
+            // NO_FEEDBACK modunda cevap kilitlenir ama geri bildirim gösterilmez
+            $isCorrect = $normalizedAnswer !== null && $normalizedAnswer === $testItem->question->correct_option;
+            $update['is_correct'] = $isCorrect;
+            
+            $payload['locked'] = true;
+            // NO_FEEDBACK: is_correct ve explanation gösterilmez
+            $payload['is_correct'] = null;
+            $payload['explanation'] = null;
         }
 
         $testItem->update($update);

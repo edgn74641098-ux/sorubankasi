@@ -6,77 +6,92 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ?? config('app.name', 'Soru Bankasi') }}</title>
     @vite(['resources/css/admin.css', 'resources/js/admin.js'])
-    <link rel="stylesheet" href="{{ asset('css/sorubank-theme.css') }}">
 </head>
-<body class="sb-admin-body">
-    <div class="container-fluid">
-        <div class="row min-vh-100">
-            <aside class="sb-admin-sidebar col-12 col-md-3 col-xl-2 bg-dark text-white p-0">
-                <div class="p-3 border-bottom border-secondary">
-                    <a href="{{ route('admin.dashboard') }}" class="text-white text-decoration-none fw-bold fs-5">Soru Bankasi</a>
-                    <div class="small text-secondary mt-1">Yonetim Paneli</div>
+<body class="admin-body">
+    @php
+        $navItems = [
+            ['label' => 'Panel', 'route' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
+            ['label' => 'Dersler', 'route' => route('admin.subjects.index'), 'active' => request()->routeIs('admin.subjects.*')],
+            ['label' => 'Sorular', 'route' => route('admin.questions.index'), 'active' => request()->routeIs('admin.questions.*')],
+            ['label' => 'Arsiv', 'route' => route('admin.archive.index'), 'active' => request()->routeIs('admin.archive.*')],
+            ['label' => 'Import', 'route' => route('admin.imports.index'), 'active' => request()->routeIs('admin.imports.*')],
+            ['label' => 'Oneriler', 'route' => route('admin.submissions.pending'), 'active' => request()->routeIs('admin.submissions.*')],
+            ['label' => 'Itirazlar', 'route' => route('admin.reports.index'), 'active' => request()->routeIs('admin.reports.*')],
+        ];
+
+        if (auth()->user()->isAdmin()) {
+            $navItems = array_merge($navItems, [
+                ['label' => 'Kullanicilar', 'route' => route('admin.users.index'), 'active' => request()->routeIs('admin.users.*')],
+                ['label' => 'Ayarlar', 'route' => route('admin.settings.index'), 'active' => request()->routeIs('admin.settings.*')],
+                ['label' => 'Audit Log', 'route' => route('admin.audit-logs.index'), 'active' => request()->routeIs('admin.audit-logs.*')],
+            ]);
+        }
+    @endphp
+
+    <div class="admin-shell">
+        <aside class="admin-sidebar">
+            <div class="admin-brand">
+                <a href="{{ route('admin.dashboard') }}" class="admin-brand__mark">SB</a>
+                <div>
+                    <a href="{{ route('admin.dashboard') }}" class="admin-brand__title">Soru Bankasi</a>
+                    <div class="admin-brand__meta">Yonetim paneli</div>
                 </div>
-                <div class="list-group list-group-flush rounded-0">
-                    <a href="{{ route('admin.dashboard') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.dashboard') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                        Panel
-                    </a>
-                    <a href="{{ route('admin.subjects.index') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.subjects.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                        Dersler
-                    </a>
-                    <a href="{{ route('admin.questions.index') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.questions.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                        Sorular
-                    </a>
-                    <a href="{{ route('admin.imports.index') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.imports.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                        Import
-                    </a>
-                    <a href="{{ route('admin.submissions.pending') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.submissions.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                        Oneriler
-                    </a>
-                    @if(auth()->user()->isAdmin())
-                        <a href="{{ route('admin.users.index') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.users.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                            Kullanicilar
-                        </a>
-                        <a href="{{ route('admin.settings.index') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.settings.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                            Ayarlar
-                        </a>
-                        <a href="{{ route('admin.audit-logs.index') }}" class="list-group-item list-group-item-action {{ request()->routeIs('admin.audit-logs.*') ? 'active' : 'bg-dark text-white border-secondary' }}">
-                            Audit Log
-                        </a>
-                    @endif
-                </div>
-            </aside>
-
-            <div class="col-12 col-md-9 col-xl-10 p-0">
-                <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom px-3">
-                    <div class="container-fluid px-0">
-                        <span class="navbar-brand mb-0 h1">{{ $pageTitle ?? 'Yonetim Paneli' }}</span>
-                        <div class="d-flex align-items-center gap-3">
-                            <a href="{{ route('subjects.index') }}" class="btn btn-outline-secondary btn-sm">Siteye Don</a>
-                            <div class="text-end">
-                                <div class="fw-semibold">{{ auth()->user()->name }}</div>
-                                <div class="small text-muted">{{ auth()->user()->email }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </nav>
-
-                <main class="p-4">
-                    @if (session('success'))
-                        <div class="alert alert-success">{{ session('success') }}</div>
-                    @endif
-                    @if ($errors->any())
-                        <div class="alert alert-danger">
-                            <ul class="mb-0">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                        </div>
-                    @endif
-
-                    @yield('content')
-                </main>
             </div>
+
+            <div class="admin-profile-card">
+                <div class="admin-avatar">{{ str(auth()->user()->name)->substr(0, 1)->upper() }}</div>
+                <div>
+                    <div class="admin-profile-name">{{ auth()->user()->name }}</div>
+                    <div class="admin-profile-role">{{ auth()->user()->isAdmin() ? 'Administrator' : 'Editor' }}</div>
+                </div>
+            </div>
+
+            <nav class="admin-nav" aria-label="Yonetim menusu">
+                @foreach($navItems as $item)
+                    <a href="{{ $item['route'] }}" class="admin-nav__link {{ $item['active'] ? 'is-active' : '' }}">
+                        <span>{{ $item['label'] }}</span>
+                    </a>
+                @endforeach
+            </nav>
+
+            <div class="admin-sidebar__foot">
+                <div class="admin-sidebar__label">Hizli Durum</div>
+                <div class="admin-sidebar__note">Tum ana bolumlere bu menuden erisin.</div>
+            </div>
+        </aside>
+
+        <div class="admin-main">
+            <header class="admin-topbar">
+                <div>
+                    <div class="admin-topbar__title">{{ $pageTitle ?? $title ?? 'Yonetim' }}</div>
+                    <div class="admin-topbar__subtitle">Tum aktif operasyonlari ve kritik islemleri buradan takip edin.</div>
+                </div>
+
+                <div class="admin-topbar__actions">
+                    <form method="GET" action="{{ route('admin.search') }}" class="admin-search">
+                        <input type="search" name="q" value="{{ request('q') }}" placeholder="Hemen ara..." aria-label="Yonetim panelinde ara">
+                        <button type="submit">Ara</button>
+                    </form>
+                    <a href="{{ route('subjects.index') }}" class="admin-top-link">Ana Sayfa</a>
+                </div>
+            </header>
+
+            <main class="admin-content">
+                @if (session('success'))
+                    <div class="alert alert-success admin-alert">{{ session('success') }}</div>
+                @endif
+                @if ($errors->any())
+                    <div class="alert alert-danger admin-alert">
+                        <ul class="mb-0">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                @yield('content')
+            </main>
         </div>
     </div>
 </body>
