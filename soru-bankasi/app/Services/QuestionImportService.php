@@ -50,9 +50,8 @@ class QuestionImportService
                 $normalized = $this->normalizeRow($row);
                 $subjectId = $this->resolveSubjectId($normalized['subject']);
                 $hash = $this->questionHash($subjectId, $normalized['question_text']);
-                $matchedQuestion = Question::query()
+                $matchedQuestion = Question::withTrashed()
                     ->where('subject_id', $subjectId)
-                    ->where('status', '!=', 'archived')
                     ->whereRaw('LOWER(TRIM(question_text)) = ?', [mb_strtolower(trim($normalized['question_text']))])
                     ->first();
 
@@ -139,6 +138,17 @@ class QuestionImportService
                     continue;
                 }
 
+                $matchedQuestion = $importRow->matched_question_id
+                    ? Question::withTrashed()->find($importRow->matched_question_id)
+                    : null;
+
+                if ($matchedQuestion && $this->shouldReactivateMatchedQuestion($matchedQuestion)) {
+                    $this->reactivateMatchedQuestion($matchedQuestion, $preview, $actor);
+                    $importRow->update(['action' => 'reactivated']);
+                    $merged++;
+                    continue;
+                }
+
                 if ($decision === 'skip') {
                     $importRow->update(['action' => 'skipped']);
                     $skipped++;
@@ -146,19 +156,9 @@ class QuestionImportService
                 }
 
                 if ($decision === 'merge' && $importRow->matched_question_id) {
-                    $question = Question::query()->find($importRow->matched_question_id);
+                    $question = Question::withTrashed()->find($importRow->matched_question_id);
                     if ($question) {
-                        $question->update([
-                            'question_text' => $preview['question_text'],
-                            'option_a' => $preview['option_a'],
-                            'option_b' => $preview['option_b'],
-                            'option_c' => $preview['option_c'],
-                            'option_d' => $preview['option_d'],
-                            'option_e' => $preview['option_e'],
-                            'correct_option' => $preview['correct_option'],
-                            'explanation_text' => $preview['explanation_text'],
-                            'current_version' => $question->current_version + 1,
-                        ]);
+                        $this->mergeMatchedQuestion($question, $preview);
                         $importRow->update(['action' => 'merged']);
                         $merged++;
                         continue;
@@ -204,6 +204,41 @@ class QuestionImportService
             'manual_review' => $manualReview,
             'skipped' => $skipped,
         ];
+    }
+
+    private function shouldReactivateMatchedQuestion(Question $question): bool
+    {
+        return $question->trashed() || $question->status !== 'active';
+    }
+
+    private function reactivateMatchedQuestion(Question $question, array $preview, User $actor): void
+    {
+        if ($question->trashed()) {
+            $question->restore();
+        }
+
+        $this->mergeMatchedQuestion($question, $preview, [
+            'approved_by' => $actor->id,
+            'status' => 'active',
+            'approved_at' => now(),
+            'archived_at' => null,
+            'purge_after' => null,
+        ]);
+    }
+
+    private function mergeMatchedQuestion(Question $question, array $preview, array $extra = []): void
+    {
+        $question->update(array_merge([
+            'question_text' => $preview['question_text'],
+            'option_a' => $preview['option_a'],
+            'option_b' => $preview['option_b'],
+            'option_c' => $preview['option_c'],
+            'option_d' => $preview['option_d'],
+            'option_e' => $preview['option_e'],
+            'correct_option' => $preview['correct_option'],
+            'explanation_text' => $preview['explanation_text'],
+            'current_version' => $question->current_version + 1,
+        ], $extra));
     }
 
     private function loadPreviewRows(QuestionImportBatch $batch): array

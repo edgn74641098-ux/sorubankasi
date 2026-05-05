@@ -83,7 +83,7 @@ class ArchiveController extends Controller
 
         return redirect()
             ->route('admin.archive.index')
-            ->with('success', 'Ders arsivden geri alindi. Bagli sorular pasif olarak Sorular bolumune tasindi.');
+            ->with('success', 'Ders arsivden geri alindi. Bagli sorular aktif hale getirildi.');
     }
 
     public function restoreQuestion(Question $question): RedirectResponse
@@ -95,7 +95,7 @@ class ArchiveController extends Controller
 
         return redirect()
             ->route('admin.archive.index')
-            ->with('success', 'Soru arsivden geri alindi ve pasif olarak Sorular bolumune tasindi.');
+            ->with('success', 'Soru arsivden geri alindi ve aktif hale getirildi.');
     }
 
     public function restoreSubjects(Request $request): RedirectResponse
@@ -121,7 +121,7 @@ class ArchiveController extends Controller
 
         return redirect()
             ->route('admin.archive.index')
-            ->with('success', $subjects->count() . ' ders arsivden geri alindi. Bagli sorular pasif olarak Sorular bolumune tasindi.');
+            ->with('success', $subjects->count() . ' ders arsivden geri alindi. Bagli sorular aktif hale getirildi.');
     }
 
     public function removeSubject(Subject $subject): RedirectResponse
@@ -189,7 +189,7 @@ class ArchiveController extends Controller
 
         return redirect()
             ->route('admin.archive.index')
-            ->with('success', $questions->count() . ' soru arsivden geri alindi ve pasif olarak Sorular bolumune tasindi.');
+            ->with('success', $questions->count() . ' soru arsivden geri alindi ve aktif hale getirildi.');
     }
 
     public function removeQuestion(Question $question): RedirectResponse
@@ -244,9 +244,9 @@ class ArchiveController extends Controller
         $subject->questions()
             ->where('status', 'archived')
             ->update([
-                'status' => 'inactive',
-                'approved_by' => null,
-                'approved_at' => null,
+                'status' => 'active',
+                'approved_by' => request()->user()?->id,
+                'approved_at' => now(),
                 'archived_at' => null,
                 'purge_after' => null,
                 'updated_at' => now(),
@@ -264,9 +264,9 @@ class ArchiveController extends Controller
         }
 
         $question->update([
-            'status' => 'inactive',
-            'approved_by' => null,
-            'approved_at' => null,
+            'status' => 'active',
+            'approved_by' => request()->user()?->id,
+            'approved_at' => now(),
             'archived_at' => null,
             'purge_after' => null,
         ]);
@@ -301,7 +301,7 @@ class ArchiveController extends Controller
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'old_value' => ['status' => 'archived'],
-            'new_value' => $newValue + ['status' => $isRemoved ? 'removed_from_archive_soft_deleted' : 'restored_inactive_or_active'],
+            'new_value' => $newValue + ['status' => $isRemoved ? 'removed_from_archive_soft_deleted' : 'restored_active'],
             'reason' => $isRemoved ? 'Arsivden kaldirma' : 'Arsivden geri alma',
             'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),

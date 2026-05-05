@@ -221,6 +221,86 @@ class QuestionController extends Controller
             ->with('success', $questions->count() . ' soru arsive tasindi.');
     }
 
+    public function activateBulk(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'question_ids' => ['nullable', 'array'],
+            'question_ids.*' => ['integer', 'exists:questions,id'],
+            'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
+            'status' => ['nullable', Rule::in(array_keys($this->statusOptions()))],
+            'search' => ['nullable', 'string', 'max:255'],
+            'scope' => ['required', Rule::in(['selected', 'filter'])],
+        ]);
+
+        if ($validated['scope'] === 'selected' && empty($validated['question_ids'] ?? [])) {
+            return back()->withErrors([
+                'questions' => 'Aktif hale getirmek icin en az bir pasif soru secin.',
+            ]);
+        }
+
+        if ($validated['scope'] === 'filter' && ($validated['status'] ?? null) !== 'inactive') {
+            return back()->withErrors([
+                'questions' => 'Filtredeki tum sorulari aktif yapmak icin durum filtresi Pasif olmalidir.',
+            ]);
+        }
+
+        $questions = Question::query()
+            ->where('status', 'inactive')
+            ->when(
+                $validated['scope'] === 'selected',
+                fn ($query) => $query->whereIn('id', $validated['question_ids']),
+                fn ($query) => $query
+                    ->when($validated['subject_id'] ?? null, fn ($query, $subjectId) => $query->where('subject_id', $subjectId))
+                    ->when(filled($validated['search'] ?? null), fn ($query) => $query->where('question_text', 'like', '%' . $validated['search'] . '%'))
+            )
+            ->get();
+
+        $questions->each(fn (Question $question) => $this->authorize('update', $question));
+
+        DB::transaction(function () use ($request, $questions): void {
+            $questions->each(function (Question $question) use ($request): void {
+                $oldValue = $this->versionPayload($question);
+                $question->update([
+                    'status' => 'active',
+                    'approved_by' => $request->user()->id,
+                    'approved_at' => now(),
+                    'archived_at' => null,
+                    'purge_after' => null,
+                ]);
+
+                $this->auditLog->record(
+                    $request->user(),
+                    'question.activated',
+                    'questions',
+                    $question->id,
+                    $oldValue,
+                    $this->versionPayload($question->fresh()),
+                    'Pasif soru aktif hale getirildi.',
+                    $request
+                );
+            });
+
+            if ($questions->isNotEmpty()) {
+                $this->auditLog->record(
+                    $request->user(),
+                    'question.activated_bulk',
+                    'questions',
+                    null,
+                    null,
+                    ['question_ids' => $questions->pluck('id')->all(), 'count' => $questions->count()],
+                    $questions->count() . ' pasif soru toplu aktif hale getirildi.',
+                    $request
+                );
+            }
+        });
+
+        return redirect()
+            ->route('admin.questions.index', $request->only(['subject_id', 'status', 'search']))
+            ->with('success', $questions->count() . ' pasif soru aktif hale getirildi.');
+    }
+
     private function archiveQuestions(Collection $questions, Request $request): void
     {
         $questions->each(fn (Question $question) => $this->archiveQuestion($question, $request));

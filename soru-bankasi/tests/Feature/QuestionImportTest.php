@@ -176,7 +176,7 @@ class QuestionImportTest extends TestCase
         $this->assertSame('', $row->payload_json['explanation_text']);
     }
 
-    public function test_import_reactivates_archived_subject_and_inserts_when_old_question_is_archived(): void
+    public function test_import_reactivates_archived_subject_and_archived_question(): void
     {
         $admin = $this->createAdmin();
         $subject = Subject::query()->create([
@@ -186,7 +186,7 @@ class QuestionImportTest extends TestCase
             'archived_at' => now()->subDay(),
             'purge_after' => now()->addDays(6),
         ]);
-        Question::factory()->create([
+        $archivedQuestion = Question::factory()->create([
             'subject_id' => $subject->id,
             'created_by' => $admin->id,
             'approved_by' => null,
@@ -209,7 +209,7 @@ class QuestionImportTest extends TestCase
             ->assertRedirect();
 
         $row = QuestionImportRow::query()->first();
-        $this->assertNull($row->matched_question_id);
+        $this->assertSame($archivedQuestion->id, $row->matched_question_id);
 
         $this->actingAs($admin)
             ->post(route('admin.imports.confirm', QuestionImportBatch::query()->value('id')), [
@@ -222,16 +222,81 @@ class QuestionImportTest extends TestCase
         $subject->refresh();
         $this->assertTrue($subject->is_active);
         $this->assertNull($subject->archived_at);
+        $archivedQuestion->refresh();
+        $this->assertSame('active', $archivedQuestion->status);
+        $this->assertSame($admin->id, $archivedQuestion->approved_by);
+        $this->assertNotNull($archivedQuestion->approved_at);
+        $this->assertNull($archivedQuestion->archived_at);
         $this->assertSame(1, Question::query()
             ->where('subject_id', $subject->id)
             ->where('status', 'active')
             ->where('question_text', 'Politika sorusu tekrar yuklenebilir mi?')
             ->count());
-        $this->assertSame(1, Question::query()
+        $this->assertSame(0, Question::query()
             ->where('subject_id', $subject->id)
             ->where('status', 'archived')
             ->where('question_text', 'Politika sorusu tekrar yuklenebilir mi?')
             ->count());
+        $this->assertDatabaseHas('question_import_rows', [
+            'id' => $row->id,
+            'action' => 'reactivated',
+        ]);
+    }
+
+    public function test_import_reactivates_inactive_matching_question(): void
+    {
+        $admin = $this->createAdmin();
+        $subject = Subject::query()->create([
+            'name' => 'Matematik',
+            'slug' => 'matematik',
+            'is_active' => true,
+        ]);
+        $inactiveQuestion = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => null,
+            'question_text' => 'Pasif soru import ile aktif olur mu?',
+            'option_a' => 'Eski A',
+            'status' => 'inactive',
+            'approved_at' => null,
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'inactive-question-import');
+        file_put_contents($path, implode("\n", [
+            'subject,question_text,option_a,option_b,option_c,option_d,option_e,correct_option,explanation_text',
+            'Matematik,Pasif soru import ile aktif olur mu?,Yeni A,Yeni B,Yeni C,Yeni D,Yeni E,A,Yeni aciklama',
+        ]));
+
+        $file = new UploadedFile($path, 'inactive-question-import.csv', 'text/csv', null, true);
+
+        $this->actingAs($admin)
+            ->post(route('admin.imports.store'), ['file' => $file])
+            ->assertRedirect();
+
+        $row = QuestionImportRow::query()->first();
+        $this->assertSame($inactiveQuestion->id, $row->matched_question_id);
+
+        $this->actingAs($admin)
+            ->post(route('admin.imports.confirm', QuestionImportBatch::query()->value('id')), [
+                'actions' => [
+                    $row->id => 'skip',
+                ],
+            ])
+            ->assertRedirect();
+
+        $inactiveQuestion->refresh();
+        $this->assertSame('active', $inactiveQuestion->status);
+        $this->assertSame($admin->id, $inactiveQuestion->approved_by);
+        $this->assertNotNull($inactiveQuestion->approved_at);
+        $this->assertSame('Yeni A', $inactiveQuestion->option_a);
+        $this->assertSame(1, Question::query()
+            ->where('subject_id', $subject->id)
+            ->where('question_text', 'Pasif soru import ile aktif olur mu?')
+            ->count());
+        $this->assertDatabaseHas('question_import_rows', [
+            'id' => $row->id,
+            'action' => 'reactivated',
+        ]);
     }
 
     private function createAdmin(): User

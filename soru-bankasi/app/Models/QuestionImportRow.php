@@ -29,6 +29,6 @@ class QuestionImportRow extends Model
 
     public function matchedQuestion(): BelongsTo
     {
-        return $this->belongsTo(Question::class, 'matched_question_id');
+        return $this->belongsTo(Question::class, 'matched_question_id')->withTrashed();
     }
 }

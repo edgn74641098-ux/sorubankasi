@@ -11,6 +11,10 @@
 
     <div class="card shadow-sm border-0">
         <div class="card-body">
+            @if($errors->any())
+                <div class="alert alert-danger">{{ $errors->first() }}</div>
+            @endif
+
             <form method="GET" action="{{ route('admin.questions.index') }}" class="row g-3 mb-4">
                 <div class="col-md-3">
                     <label for="subject_id" class="form-label">Ders</label>
@@ -46,17 +50,42 @@
                 <form id="bulkArchiveForm" method="POST" action="{{ route('admin.questions.archive-bulk') }}" class="d-flex justify-content-between align-items-center gap-2 mb-3">
                     @csrf
                     <div class="text-muted small">Secili sorulari tek seferde arsive tasiyabilirsiniz.</div>
-                    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Secili sorulari arsive tasimak istediginize emin misiniz?')">
-                        Secilileri Arsive Tasi
-                    </button>
+                    <div class="d-flex flex-wrap gap-2 justify-content-end">
+                        @if(auth()->user()->isAdmin())
+                            <button type="submit" form="bulkActivateForm" name="scope" value="selected" class="btn btn-outline-success btn-sm" onclick="return confirm('Secili pasif sorulari aktif hale getirmek istediginize emin misiniz?')">
+                                Secili Pasifleri Aktif Yap
+                            </button>
+                        @endif
+                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Secili sorulari arsive tasimak istediginize emin misiniz?')">
+                            Secilileri Arsive Tasi
+                        </button>
+                    </div>
                 </form>
+                @if(auth()->user()->isAdmin())
+                    <form id="bulkActivateForm" method="POST" action="{{ route('admin.questions.activate-bulk') }}">
+                        @csrf
+                        <input type="hidden" name="subject_id" value="{{ $filters['subject_id'] }}">
+                        <input type="hidden" name="status" value="{{ $filters['status'] }}">
+                        <input type="hidden" name="search" value="{{ $filters['search'] }}">
+                    </form>
+                    @if($filters['status'] === 'inactive')
+                        <div class="alert alert-warning d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                            <div>
+                                Bu filtrede {{ $questions->total() }} pasif soru var. Pasif sorular kullanici ders havuzunda ve aramada aktif soru olarak gorunmez.
+                            </div>
+                            <button type="submit" form="bulkActivateForm" name="scope" value="filter" class="btn btn-success btn-sm" onclick="return confirm('Bu filtredeki tum pasif sorulari aktif hale getirmek istediginize emin misiniz?')">
+                                Filtredeki Tum Pasifleri Aktif Yap
+                            </button>
+                        </div>
+                    @endif
+                @endif
 
                 <div class="table-responsive">
                     <table class="table align-middle">
                         <thead>
                             <tr>
                                 <th class="sb-width-48">
-                                    <input type="checkbox" class="form-check-input" onclick="document.querySelectorAll('.js-question-select').forEach((el) => el.checked = this.checked)">
+                                    <input type="checkbox" class="form-check-input js-question-select-all">
                                 </th>
                                 <th>Ders</th>
                                 <th>Soru</th>
@@ -71,6 +100,9 @@
                                 <tr>
                                     <td>
                                         <input type="checkbox" class="form-check-input js-question-select" name="question_ids[]" value="{{ $question->id }}" form="bulkArchiveForm">
+                                        @if(auth()->user()->isAdmin())
+                                            <input type="checkbox" class="form-check-input js-question-activate-select d-none" name="question_ids[]" value="{{ $question->id }}" form="bulkActivateForm">
+                                        @endif
                                     </td>
                                     <td>{{ $question->subject?->name }}</td>
                                     <td class="sb-min-340">{{ \Illuminate\Support\Str::limit($question->question_text, 120) }}</td>
@@ -103,4 +135,24 @@
             @endif
         </div>
     </div>
+    <script>
+        document.querySelector('.js-question-select-all')?.addEventListener('change', (event) => {
+            document.querySelectorAll('.js-question-select').forEach((checkbox) => {
+                checkbox.checked = event.target.checked;
+                const hidden = document.querySelector(`.js-question-activate-select[value="${checkbox.value}"]`);
+                if (hidden) {
+                    hidden.checked = checkbox.checked;
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-question-select').forEach((checkbox) => {
+            checkbox.addEventListener('change', () => {
+                const hidden = document.querySelector(`.js-question-activate-select[value="${checkbox.value}"]`);
+                if (hidden) {
+                    hidden.checked = checkbox.checked;
+                }
+            });
+        });
+    </script>
 @endsection

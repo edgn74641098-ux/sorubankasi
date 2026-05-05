@@ -107,6 +107,8 @@ class AuditLogController extends Controller
                 'subject.archived',
                 'question.created',
                 'question.updated',
+                'question.activated',
+                'question.activated_bulk',
                 'question.archived',
                 'question.archived_bulk',
                 'archive.subject_removed',

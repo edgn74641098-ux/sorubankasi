@@ -580,6 +580,62 @@ class AdminManagementTest extends TestCase
         });
     }
 
+    public function test_admin_can_bulk_activate_filtered_inactive_questions(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $subject = Subject::factory()->create(['is_active' => true]);
+        $matchingQuestions = Question::factory()->count(3)->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => null,
+            'status' => 'inactive',
+            'question_text' => 'Siber politika pasif soru',
+        ]);
+        $otherQuestion = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => null,
+            'status' => 'inactive',
+            'question_text' => 'Baska pasif soru',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.questions.index', [
+                'subject_id' => $subject->id,
+                'status' => 'inactive',
+                'search' => 'Siber politika',
+            ]))
+            ->assertOk()
+            ->assertSee('Filtredeki Tum Pasifleri Aktif Yap');
+
+        $this->actingAs($admin)
+            ->post(route('admin.questions.activate-bulk'), [
+                'scope' => 'filter',
+                'subject_id' => $subject->id,
+                'status' => 'inactive',
+                'search' => 'Siber politika',
+            ])
+            ->assertRedirect(route('admin.questions.index', [
+                'subject_id' => $subject->id,
+                'status' => 'inactive',
+                'search' => 'Siber politika',
+            ]));
+
+        foreach ($matchingQuestions as $question) {
+            $question->refresh();
+            $this->assertSame('active', $question->status);
+            $this->assertSame($admin->id, $question->approved_by);
+            $this->assertNotNull($question->approved_at);
+        }
+
+        $this->assertSame('inactive', $otherQuestion->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'question.activated_bulk',
+            'entity_type' => 'questions',
+        ]);
+    }
+
     public function test_archive_prune_soft_deletes_expired_archive_records(): void
     {
         $admin = $this->createUserWithRole('admin');
@@ -897,7 +953,9 @@ class AdminManagementTest extends TestCase
         $this->assertTrue($subject->is_active);
         $this->assertNull($subject->archived_at);
         $this->assertNull($subject->purge_after);
-        $this->assertSame('inactive', $question->status);
+        $this->assertSame('active', $question->status);
+        $this->assertSame($admin->id, $question->approved_by);
+        $this->assertNotNull($question->approved_at);
         $this->assertNull($question->archived_at);
         $this->assertNull($question->purge_after);
         $this->assertDatabaseHas('audit_logs', [
@@ -945,7 +1003,9 @@ class AdminManagementTest extends TestCase
 
         $this->assertTrue($subject->is_active);
         $this->assertNull($subject->archived_at);
-        $this->assertSame('inactive', $question->status);
+        $this->assertSame('active', $question->status);
+        $this->assertSame($admin->id, $question->approved_by);
+        $this->assertNotNull($question->approved_at);
         $this->assertNull($question->archived_at);
         $this->assertNull($question->purge_after);
         $this->assertDatabaseHas('audit_logs', [
@@ -992,7 +1052,9 @@ class AdminManagementTest extends TestCase
 
         foreach ($questions as $question) {
             $question->refresh();
-            $this->assertSame('inactive', $question->status);
+            $this->assertSame('active', $question->status);
+            $this->assertSame($admin->id, $question->approved_by);
+            $this->assertNotNull($question->approved_at);
             $this->assertNull($question->archived_at);
         }
         $this->assertDatabaseHas('audit_logs', [
@@ -1031,7 +1093,9 @@ class AdminManagementTest extends TestCase
 
         foreach ($questions->take(2) as $question) {
             $question->refresh();
-            $this->assertSame('inactive', $question->status);
+            $this->assertSame('active', $question->status);
+            $this->assertSame($admin->id, $question->approved_by);
+            $this->assertNotNull($question->approved_at);
             $this->assertNull($question->archived_at);
         }
 

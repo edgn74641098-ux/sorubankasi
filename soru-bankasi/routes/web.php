@@ -67,6 +67,7 @@ Route::middleware(['auth', 'verified', 'role:admin,editor'])
         Route::resource('questions', AdminQuestionController::class)
             ->except(['show']);
         Route::post('questions/archive-bulk', [AdminQuestionController::class, 'archiveBulk'])->name('questions.archive-bulk');
+        Route::post('questions/activate-bulk', [AdminQuestionController::class, 'activateBulk'])->name('questions.activate-bulk');
         Route::get('questions/{question}/versions', [QuestionVersionController::class, 'index'])->name('questions.versions.index');
         Route::post('questions/{question}/versions/{version}/rollback', [QuestionVersionController::class, 'rollback'])->name('questions.versions.rollback');
 
