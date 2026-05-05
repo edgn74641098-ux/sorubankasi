@@ -38,11 +38,11 @@ Route::get('/', HomeController::class);
 Route::get('/health', HealthController::class)->name('health');
 
 Route::get('/dashboard', DashboardController::class)
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'system.available'])
     ->name('dashboard');
 
 Route::get('/subjects', [SubjectController::class, 'index'])
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'system.available'])
     ->name('subjects.index');
 
 Route::middleware(['auth', 'verified', 'role:admin,editor'])
@@ -96,13 +96,13 @@ Route::middleware(['auth', 'verified', 'role:admin,editor'])
         Route::post('submissions/{submission}/revoke', [UserSubmittedQuestionController::class, 'revokeApproval'])->name('submissions.revoke');
     });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'system.available'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'system.available'])->group(function () {
     Route::get('/tests/start', [TestController::class, 'create'])->name('tests.create');
     Route::post('/tests/start', [TestController::class, 'start'])->name('tests.start');
     Route::get('/tests/{test}', [TestController::class, 'show'])->name('tests.show');

@@ -71,6 +71,65 @@ class AuthenticationTest extends TestCase
         ]);
     }
 
+    public function test_inactive_login_message_and_login_rate_limit_follow_settings(): void
+    {
+        app(\App\Services\SettingsService::class)->set('inactive_login_message', 'Hesabiniz yonetici tarafindan gecici olarak pasife alindi.');
+        app(\App\Services\SettingsService::class)->set('login_rate_limit', 2);
+        app(\App\Services\SettingsService::class)->set('login_lockout_duration', 60);
+
+        $passiveUser = User::factory()->create([
+            'is_active' => false,
+        ]);
+
+        $this->withValidCaptcha()
+            ->from('/login')
+            ->post('/login', [
+                'email' => $passiveUser->email,
+                'password' => 'password',
+                'captcha_answer' => '7',
+            ])
+            ->assertRedirect('/login')
+            ->assertSessionHasErrors([
+                'email' => 'Hesabiniz yonetici tarafindan gecici olarak pasife alindi.',
+            ]);
+
+        $activeUser = User::factory()->create();
+
+        foreach (range(1, 2) as $attempt) {
+            $this->withValidCaptcha()->post('/login', [
+                'email' => $activeUser->email,
+                'password' => 'wrong-password',
+                'captcha_answer' => '7',
+            ]);
+        }
+
+        $this->withValidCaptcha()
+            ->post('/login', [
+                'email' => $activeUser->email,
+                'password' => 'wrong-password',
+                'captcha_answer' => '7',
+            ])
+            ->assertSessionHasErrors('email');
+    }
+
+    public function test_google_login_visibility_follows_setting(): void
+    {
+        app(\App\Services\SettingsService::class)->set('google_auth_enabled', false);
+
+        $this->get('/login')
+            ->assertOk()
+            ->assertDontSee('Google ile devam et');
+
+        $this->get(route('auth.google.redirect'))
+            ->assertForbidden();
+
+        app(\App\Services\SettingsService::class)->set('google_auth_enabled', true);
+
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('Google ile devam et');
+    }
+
     public function test_users_can_logout(): void
     {
         $user = User::factory()->create();

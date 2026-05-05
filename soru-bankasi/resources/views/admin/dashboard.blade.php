@@ -28,12 +28,6 @@
             ['label' => 'Yeni Kullanici', 'value' => $todayStats['new_users'], 'hint' => 'Bugun kayit olan', 'icon' => 'bi-person-plus'],
         ];
 
-        $qualityGroups = [
-            ['title' => 'Cok Kolay', 'count' => $quality_queue['too_easy_count'], 'rows' => $quality_queue['too_easy_questions'], 'tone' => 'success'],
-            ['title' => 'Cok Zor', 'count' => $quality_queue['too_hard_count'], 'rows' => $quality_queue['too_hard_questions'], 'tone' => 'warning'],
-            ['title' => 'Cok Itiraz Alan', 'count' => $quality_queue['reported_count'], 'rows' => $quality_queue['reported_questions'], 'tone' => 'danger'],
-        ];
-
         $maxTests = max(1, collect($operationTrend)->max('tests'));
         $maxQuestions = max(1, collect($operationTrend)->max('questions'));
         $trendTotals = [
@@ -246,31 +240,4 @@
         </article>
     </section>
 
-    <section class="admin-quality-grid">
-        <div class="admin-section-header">
-            <h2>Kalite Kuyrugu</h2>
-            <p>Adminin duzeltme veya inceleme yapmasi gereken soru sinyalleri.</p>
-        </div>
-        <div class="admin-quality-cards">
-            @foreach($qualityGroups as $group)
-                <div class="admin-quality-card admin-quality-card--{{ $group['tone'] }}">
-                    <div class="admin-quality-card__head">
-                        <span>{{ $group['title'] }}</span>
-                        <strong>{{ number_format($group['count']) }}</strong>
-                    </div>
-                    @forelse($group['rows'] as $question)
-                        <div class="admin-quality-item">
-                            <div>
-                                <strong>{{ $question->subject?->name ?? '-' }}</strong>
-                                <p>{{ str($question->question_text)->limit(80) }}</p>
-                            </div>
-                            <a href="{{ route('admin.questions.edit', $question) }}">Incele</a>
-                        </div>
-                    @empty
-                        <p class="admin-empty-state">Kayit yok.</p>
-                    @endforelse
-                </div>
-            @endforeach
-        </div>
-    </section>
 @endsection

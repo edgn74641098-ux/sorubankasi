@@ -184,6 +184,45 @@ class UserSubmissionModerationTest extends TestCase
         $this->assertNull($question->archived_at);
     }
 
+    public function test_submission_settings_control_availability_limit_reward_and_rejection_note(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+        $subject = Subject::factory()->create(['is_active' => true]);
+
+        $this->seedSetting('user_submissions_enabled', false);
+        $this->actingAs($user)
+            ->get(route('questions.create'))
+            ->assertForbidden();
+
+        $this->seedSetting('user_submissions_enabled', true);
+        $this->seedSetting('daily_question_limit', 1);
+        $this->createPendingSubmission($user, $subject);
+
+        $this->actingAs($user)
+            ->post(route('questions.store'), $this->validSubmissionPayload($subject))
+            ->assertSessionHasErrors('submission');
+
+        $this->seedSetting('submission_approval_reward', 25);
+        $rewardedSubmission = $this->createPendingSubmission($user, $subject);
+        $this->actingAs($admin)
+            ->post(route('admin.submissions.approve', $rewardedSubmission))
+            ->assertRedirect();
+
+        $this->assertSame(25, (int) $user->fresh()->total_score);
+
+        $this->seedSetting('submission_rejection_note_required', false);
+        $optionalNoteSubmission = $this->createPendingSubmission($user, $subject);
+        $this->actingAs($admin)
+            ->post(route('admin.submissions.reject', $optionalNoteSubmission), [
+                'review_note' => null,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('rejected', $optionalNoteSubmission->fresh()->status);
+        $this->assertNull($optionalNoteSubmission->fresh()->review_note);
+    }
+
     private function createUserWithRole(string $role): User
     {
         $role = Role::query()->firstOrCreate(['name' => $role]);
@@ -239,5 +278,25 @@ class UserSubmissionModerationTest extends TestCase
             ],
             'status' => 'pending',
         ]);
+    }
+
+    private function validSubmissionPayload(Subject $subject): array
+    {
+        return [
+            'subject_id' => $subject->id,
+            'question_text' => 'Kullanici tarafindan limit testi icin onerilen yeterli uzunlukta soru metni',
+            'option_a' => 'Birinci secenek',
+            'option_b' => 'Ikinci secenek',
+            'option_c' => 'Ucuncu secenek',
+            'option_d' => 'Dorduncu secenek',
+            'option_e' => 'Besinci secenek',
+            'correct_option' => 'A',
+            'explanation_text' => 'Bu soru icin yeterli uzunlukta ve gecerli bir aciklama metni.',
+        ];
+    }
+
+    private function seedSetting(string $key, mixed $value): void
+    {
+        app(\App\Services\SettingsService::class)->set($key, $value);
     }
 }

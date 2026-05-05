@@ -168,6 +168,85 @@ class LeaderboardTest extends TestCase
         $response->assertDontSee('Form Player 6');
     }
 
+    public function test_leaderboard_limits_follow_admin_settings(): void
+    {
+        $user = $this->createVerifiedUser('Viewer');
+        $subject = Subject::query()->create([
+            'name' => 'Ayarli Siralama',
+            'slug' => 'ayarli-siralama',
+            'is_active' => true,
+        ]);
+        $snapshotAt = now()->startOfMinute();
+
+        $this->seedSetting('leaderboard_global_limit', 7);
+        $this->seedSetting('leaderboard_weekly_limit', 2);
+        $this->seedSetting('leaderboard_form_limit', 3);
+
+        for ($rank = 1; $rank <= 10; $rank++) {
+            $participant = $this->createVerifiedUser('Configured Global ' . $rank);
+
+            LeaderboardGlobalSnapshot::query()->create([
+                'user_id' => $participant->id,
+                'score' => 1000 - $rank,
+                'questions_total' => 100,
+                'correct_total' => 80,
+                'wrong_total' => 20,
+                'rank' => $rank,
+                'snapshot_at' => $snapshotAt,
+            ]);
+        }
+
+        for ($rank = 1; $rank <= 4; $rank++) {
+            $weeklyUser = $this->createVerifiedUser('Configured Weekly ' . $rank);
+            Test::query()->create([
+                'user_id' => $weeklyUser->id,
+                'subject_id' => $subject->id,
+                'question_count' => 20,
+                'duration_minutes' => 30,
+                'score' => 400 - $rank,
+                'correct_count' => 15,
+                'wrong_count' => 5,
+                'blank_count' => 0,
+                'started_at' => now()->subHour(),
+                'ended_at' => now(),
+                'status' => 'finished',
+                'feedback_mode' => 'DELAYED_FEEDBACK',
+                'aborted' => false,
+            ]);
+        }
+
+        for ($rank = 1; $rank <= 4; $rank++) {
+            $formUser = $this->createVerifiedUser('Configured Form ' . $rank);
+            foreach ([1, 2] as $testNo) {
+                Test::query()->create([
+                    'user_id' => $formUser->id,
+                    'subject_id' => $subject->id,
+                    'question_count' => 20,
+                    'duration_minutes' => 30,
+                    'score' => 80 - $rank,
+                    'correct_count' => 15,
+                    'wrong_count' => 5,
+                    'blank_count' => 0,
+                    'started_at' => now()->subHours($testNo),
+                    'ended_at' => now(),
+                    'status' => 'finished',
+                    'feedback_mode' => 'DELAYED_FEEDBACK',
+                    'aborted' => false,
+                ]);
+            }
+        }
+
+        $response = $this->actingAs($user)->get(route('leaderboard.index'));
+
+        $response->assertOk();
+        $response->assertSee('Configured Global 7');
+        $response->assertDontSee('Configured Global 8');
+        $response->assertSee('Configured Weekly 2');
+        $response->assertDontSee('Configured Weekly 3');
+        $response->assertSee('Configured Form 3');
+        $response->assertDontSee('Configured Form 4');
+    }
+
     public function test_leaderboard_shows_weakness_test_button_for_subject_with_wrong_questions(): void
     {
         $user = $this->createVerifiedUser('Me');
@@ -214,5 +293,10 @@ class LeaderboardTest extends TestCase
             'email_verified_at' => now(),
             'total_score' => 0,
         ]);
+    }
+
+    private function seedSetting(string $key, mixed $value): void
+    {
+        app(\App\Services\SettingsService::class)->set($key, $value);
     }
 }

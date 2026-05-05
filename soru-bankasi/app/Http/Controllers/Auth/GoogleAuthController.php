@@ -20,11 +20,7 @@ class GoogleAuthController extends Controller
 
     public function redirect(): RedirectResponse
     {
-        if (! $this->settings->getBool('google_auth_enabled', false)) {
-            return redirect()
-                ->route('login')
-                ->with('status', 'Google ile giris su anda kapali.');
-        }
+        abort_unless($this->settings->getBool('google_auth_enabled', false), 403);
 
         if (! $this->googleConfigured()) {
             return redirect()

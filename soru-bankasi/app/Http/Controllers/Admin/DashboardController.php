@@ -11,17 +11,11 @@ use App\Models\Subject;
 use App\Models\Test;
 use App\Models\User;
 use App\Models\UserSubmittedQuestion;
-use App\Services\QualityQueueService;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
-    public function __construct(
-        private readonly QualityQueueService $qualityQueueService
-    ) {
-    }
-
     public function __invoke(): View
     {
         $today = now()->toDateString();
@@ -62,17 +56,6 @@ class DashboardController extends Controller
                         ->where('status', 'archived')
                         ->where('purge_after', '<=', now()->addDay())
                         ->count(),
-                'quality_total' => $this->qualityQueueService->getTooEasyCount()
-                    + $this->qualityQueueService->getTooHardCount()
-                    + $this->qualityQueueService->getMostReportedCount(),
-            ],
-            'quality_queue' => [
-                'too_easy_count' => $this->qualityQueueService->getTooEasyCount(),
-                'too_easy_questions' => $this->qualityQueueService->getTooEasyQuestions(5),
-                'too_hard_count' => $this->qualityQueueService->getTooHardCount(),
-                'too_hard_questions' => $this->qualityQueueService->getTooHardQuestions(5),
-                'reported_count' => $this->qualityQueueService->getMostReportedCount(),
-                'reported_questions' => $this->qualityQueueService->getMostReportedQuestions(5),
             ],
             'recentTests' => Test::query()
                 ->with(['user:id,name', 'subject:id,name'])

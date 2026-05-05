@@ -412,6 +412,71 @@ class AdminManagementTest extends TestCase
             ->assertSessionHasErrors('test');
     }
 
+    public function test_maintenance_mode_blocks_user_pages_but_allows_admin_panel(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+        $this->seedSetting('maintenance_mode', true);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertStatus(503);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertSee('Operasyon Merkezi');
+    }
+
+    public function test_scoring_settings_affect_finished_test_score(): void
+    {
+        $user = $this->createUserWithRole('user');
+        $subject = Subject::factory()->create(['is_active' => true]);
+        $questions = Question::factory()->count(20)->create([
+            'subject_id' => $subject->id,
+            'created_by' => $user->id,
+            'approved_by' => $user->id,
+            'status' => 'active',
+            'approved_at' => now(),
+            'correct_option' => 'A',
+        ]);
+        $test = Test::query()->create([
+            'user_id' => $user->id,
+            'subject_id' => $subject->id,
+            'question_count' => 20,
+            'duration_minutes' => 30,
+            'started_at' => now()->subMinutes(10),
+            'status' => 'active',
+            'feedback_mode' => 'DELAYED_FEEDBACK',
+            'aborted' => false,
+        ]);
+
+        foreach ($questions as $index => $question) {
+            $test->items()->create([
+                'question_id' => $question->id,
+                'user_answer' => match ($index) {
+                    0 => 'A',
+                    1 => 'B',
+                    default => null,
+                },
+            ]);
+        }
+
+        $this->seedSetting('correct_answer_points', 4);
+        $this->seedSetting('wrong_answer_penalty_enabled', true);
+        $this->seedSetting('wrong_answer_penalty_points', 2);
+        $this->seedSetting('blank_answer_points', 1);
+
+        app(\App\Services\TestFinalizeService::class)->finalize($test);
+
+        $test->refresh();
+        $this->assertSame(20, (int) $test->score);
+        $this->assertSame(1, (int) $test->correct_count);
+        $this->assertSame(1, (int) $test->wrong_count);
+        $this->assertSame(18, (int) $test->blank_count);
+        $this->assertSame(20, (int) $user->fresh()->total_score);
+    }
+
     public function test_admin_can_archive_subject_and_its_questions(): void
     {
         $admin = $this->createUserWithRole('admin');
@@ -929,8 +994,6 @@ class AdminManagementTest extends TestCase
 
     private function seedSetting(string $key, mixed $value): void
     {
-        $setting = Setting::query()->firstOrNew(['key' => $key]);
-        $setting->setTypedValue($value);
-        $setting->save();
+        app(\App\Services\SettingsService::class)->set($key, $value);
     }
 }
