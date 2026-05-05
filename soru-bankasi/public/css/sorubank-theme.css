@@ -1284,6 +1284,30 @@ a:hover {
     max-width: 460px;
 }
 
+.sb-auth-captcha {
+    align-items: center;
+    display: flex;
+    gap: .75rem;
+    min-width: 0;
+}
+
+.sb-auth-captcha__image {
+    background: #f8fafc;
+    border: 1px solid var(--sb-line);
+    border-radius: var(--sb-radius);
+    display: block;
+    flex: 0 1 auto;
+    height: auto;
+    max-width: min(100%, 250px);
+}
+
+.sb-auth-captcha__input {
+    display: block;
+    flex: 0 0 7rem;
+    min-width: 0;
+    width: 7rem;
+}
+
 .sb-app-shell {
     background: var(--sb-soft);
 }
@@ -2409,6 +2433,17 @@ a:hover {
 
     .sb-entry-actions {
         grid-template-columns: 1fr;
+    }
+
+    .sb-auth-captcha {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .sb-auth-captcha__image,
+    .sb-auth-captcha__input {
+        max-width: 100%;
+        width: 100%;
     }
 
     .sb-hero {

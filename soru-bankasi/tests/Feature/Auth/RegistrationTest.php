@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Providers\RouteServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class RegistrationTest extends TestCase
@@ -20,6 +21,8 @@ class RegistrationTest extends TestCase
 
     public function test_new_users_can_register(): void
     {
+        Notification::fake();
+
         $response = $this->withSession([
             'captcha.prompt' => '3 + 4 = ?',
             'captcha.answer_hash' => Hash::make('7'),
@@ -33,5 +36,13 @@ class RegistrationTest extends TestCase
 
         $this->assertAuthenticated();
         $response->assertRedirect(RouteServiceProvider::HOME);
+
+        $this->assertAuthenticated();
+        $this->assertNotNull(auth()->user()->email_verified_at);
+        Notification::assertNothingSent();
+
+        $this->get(RouteServiceProvider::HOME)
+            ->assertOk()
+            ->assertDontSee('Verify Email');
     }
 }

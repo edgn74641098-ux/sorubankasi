@@ -72,6 +72,8 @@ class RegisteredUserController extends Controller
                 ->withErrors(['captcha_answer' => 'Guvenlik dogrulamasi hatali.']);
         }
 
+        $emailVerificationRequired = $this->settings->getBool('email_verification_required', false);
+
         $user = User::create([
             'role_id' => Role::query()->firstOrCreate(['name' => 'user'])->id,
             'name' => $request->name,
@@ -80,7 +82,13 @@ class RegisteredUserController extends Controller
             'total_score' => 0,
         ]);
 
-        event(new Registered($user));
+        if ($emailVerificationRequired) {
+            event(new Registered($user));
+        } else {
+            $user->forceFill([
+                'email_verified_at' => now(),
+            ])->save();
+        }
 
         $this->auditLog->record(
             $user,

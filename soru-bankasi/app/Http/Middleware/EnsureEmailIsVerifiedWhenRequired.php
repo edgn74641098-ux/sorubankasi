@@ -18,7 +18,7 @@ class EnsureEmailIsVerifiedWhenRequired
 
     public function handle(Request $request, Closure $next, ?string $redirectToRoute = null): Response
     {
-        if (! $this->settings->getBool('email_verification_required', true)) {
+        if (! $this->settings->getBool('email_verification_required', false)) {
             return $next($request);
         }
 
