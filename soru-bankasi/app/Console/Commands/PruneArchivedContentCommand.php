@@ -11,7 +11,7 @@ class PruneArchivedContentCommand extends Command
 {
     protected $signature = 'archive:prune';
 
-    protected $description = 'Permanently delete archived subjects and questions after their retention period';
+    protected $description = 'Remove archived subjects and questions from archive view after their retention period';
 
     public function handle(): int
     {
@@ -28,7 +28,6 @@ class PruneArchivedContentCommand extends Command
             ->where('status', 'archived')
             ->whereNotNull('purge_after')
             ->where('purge_after', '<=', $now)
-            ->whereDoesntHave('testItems')
             ->chunkById(100, function ($questions) use (&$deletedQuestions): void {
                 foreach ($questions as $question) {
                     $question->delete();
@@ -41,7 +40,6 @@ class PruneArchivedContentCommand extends Command
             ->whereNotNull('archived_at')
             ->whereNotNull('purge_after')
             ->where('purge_after', '<=', $now)
-            ->whereDoesntHave('tests')
             ->whereDoesntHave('questions')
             ->chunkById(100, function ($subjects) use (&$deletedSubjects): void {
                 foreach ($subjects as $subject) {
@@ -50,7 +48,7 @@ class PruneArchivedContentCommand extends Command
                 }
             });
 
-        $this->info("Archived cleanup completed. Questions deleted: {$deletedQuestions}, subjects deleted: {$deletedSubjects}.");
+        $this->info("Archived cleanup completed. Questions removed from archive: {$deletedQuestions}, subjects removed from archive: {$deletedSubjects}.");
 
         return self::SUCCESS;
     }

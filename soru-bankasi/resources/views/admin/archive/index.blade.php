@@ -6,7 +6,7 @@
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
         <div>
             <h1 class="h3 mb-1">Arsiv</h1>
-            <p class="text-muted mb-0">Arsive tasinan dersler ve sorular 7 gunluk otomatik silme takvimiyle burada takip edilir.</p>
+            <p class="text-muted mb-0">Arsive tasinan dersler ve sorular burada takip edilir. Arsivden kaldirilan kayitlar panelden gizlenir, gecmis test ve log verileri korunur.</p>
         </div>
     </div>
 
@@ -76,6 +76,13 @@
                                                         @csrf
                                                         <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Bu dersi ve arsivdeki bagli sorularini geri almak istediginize emin misiniz? Sorular pasif duruma alinir.')">Geri Al</button>
                                                     </form>
+                                                    @if(auth()->user()->isAdmin())
+                                                        <form method="POST" action="{{ route('admin.archive.subjects.remove', $subject) }}" class="d-inline">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu dersi arsivden kaldirmak istediginize emin misiniz? Kayit panelden gizlenir, gecmis test ve log verileri korunur.')">Arsivden Kaldir</button>
+                                                        </form>
+                                                    @endif
                                                 @else
                                                     <span class="badge text-bg-warning">Arsivde</span>
                                                 @endcan
@@ -100,7 +107,7 @@
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <div>
                         <h2 class="h5 mb-0">Arsivlenen Sorular</h2>
-                        <div class="small text-muted">Silinen sorular burada 7 gun boyunca izlenir.</div>
+                        <div class="small text-muted">Arsivden kaldirilan sorular panelden gizlenir; gecmis test ve log verileri korunur.</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         @if(! $questions->isEmpty() && auth()->user()->isAdmin())
@@ -175,6 +182,13 @@
                                                         @csrf
                                                         <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Bu soruyu geri almak istediginize emin misiniz? Soru pasif duruma alinir.')">Geri Al</button>
                                                     </form>
+                                                    @if(auth()->user()->isAdmin())
+                                                        <form method="POST" action="{{ route('admin.archive.questions.remove', $question) }}" class="d-inline">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu soruyu arsivden kaldirmak istediginize emin misiniz? Kayit panelden gizlenir, gecmis test ve log verileri korunur.')">Arsivden Kaldir</button>
+                                                        </form>
+                                                    @endif
                                                 @endcan
                                             </td>
                                         </tr>

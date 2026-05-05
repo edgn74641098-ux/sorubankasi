@@ -40,7 +40,7 @@ class Test extends Model
 
     public function subject(): BelongsTo
     {
-        return $this->belongsTo(Subject::class);
+        return $this->belongsTo(Subject::class)->withTrashed();
     }
 
     public function items(): HasMany

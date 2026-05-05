@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\Question;
 use App\Models\QuestionImportBatch;
 use App\Models\QuestionImportRow;
 use App\Models\Subject;
@@ -173,6 +174,64 @@ class QuestionImportTest extends TestCase
 
         $row = QuestionImportRow::query()->first();
         $this->assertSame('', $row->payload_json['explanation_text']);
+    }
+
+    public function test_import_reactivates_archived_subject_and_inserts_when_old_question_is_archived(): void
+    {
+        $admin = $this->createAdmin();
+        $subject = Subject::query()->create([
+            'name' => 'Siber Guvenlik ve Savunma Politikalari',
+            'slug' => 'siber-guvenlik-ve-savunma-politikalari',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => null,
+            'question_text' => 'Politika sorusu tekrar yuklenebilir mi?',
+            'status' => 'archived',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'archived-subject-import');
+        file_put_contents($path, implode("\n", [
+            'subject,question_text,option_a,option_b,option_c,option_d,option_e,correct_option,explanation_text',
+            'Siber Guvenlik ve Savunma Politikalari,Politika sorusu tekrar yuklenebilir mi?,A,B,C,D,E,A,Aciklama',
+        ]));
+
+        $file = new UploadedFile($path, 'archived-subject-import.csv', 'text/csv', null, true);
+
+        $this->actingAs($admin)
+            ->post(route('admin.imports.store'), ['file' => $file])
+            ->assertRedirect();
+
+        $row = QuestionImportRow::query()->first();
+        $this->assertNull($row->matched_question_id);
+
+        $this->actingAs($admin)
+            ->post(route('admin.imports.confirm', QuestionImportBatch::query()->value('id')), [
+                'actions' => [
+                    $row->id => 'insert',
+                ],
+            ])
+            ->assertRedirect();
+
+        $subject->refresh();
+        $this->assertTrue($subject->is_active);
+        $this->assertNull($subject->archived_at);
+        $this->assertSame(1, Question::query()
+            ->where('subject_id', $subject->id)
+            ->where('status', 'active')
+            ->where('question_text', 'Politika sorusu tekrar yuklenebilir mi?')
+            ->count());
+        $this->assertSame(1, Question::query()
+            ->where('subject_id', $subject->id)
+            ->where('status', 'archived')
+            ->where('question_text', 'Politika sorusu tekrar yuklenebilir mi?')
+            ->count());
     }
 
     private function createAdmin(): User

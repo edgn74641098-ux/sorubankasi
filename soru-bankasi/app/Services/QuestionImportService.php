@@ -52,6 +52,7 @@ class QuestionImportService
                 $hash = $this->questionHash($subjectId, $normalized['question_text']);
                 $matchedQuestion = Question::query()
                     ->where('subject_id', $subjectId)
+                    ->where('status', '!=', 'archived')
                     ->whereRaw('LOWER(TRIM(question_text)) = ?', [mb_strtolower(trim($normalized['question_text']))])
                     ->first();
 
@@ -289,11 +290,23 @@ class QuestionImportService
 
     private function resolveSubjectId(string $subjectName): int
     {
-        $subject = Subject::query()
+        $subject = Subject::withTrashed()
             ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($subjectName))])
             ->first();
         if (! $subject) {
             throw new \RuntimeException("Ders bulunamadi: {$subjectName}");
+        }
+
+        if ($subject->trashed()) {
+            $subject->restore();
+        }
+
+        if (! $subject->is_active || $subject->archived_at !== null || $subject->purge_after !== null) {
+            $subject->update([
+                'is_active' => true,
+                'archived_at' => null,
+                'purge_after' => null,
+            ]);
         }
 
         return $subject->id;

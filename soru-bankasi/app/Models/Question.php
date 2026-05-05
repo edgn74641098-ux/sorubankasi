@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Question extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'subject_id',
@@ -39,11 +40,12 @@ class Question extends Model
         'approved_at' => 'datetime',
         'archived_at' => 'datetime',
         'purge_after' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public function subject(): BelongsTo
     {
-        return $this->belongsTo(Subject::class);
+        return $this->belongsTo(Subject::class)->withTrashed();
     }
 
     public function createdBy(): BelongsTo

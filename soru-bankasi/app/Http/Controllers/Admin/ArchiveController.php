@@ -124,6 +124,47 @@ class ArchiveController extends Controller
             ->with('success', $subjects->count() . ' ders arsivden geri alindi. Bagli sorular pasif olarak Sorular bolumune tasindi.');
     }
 
+    public function removeSubject(Subject $subject): RedirectResponse
+    {
+        abort_unless(request()->user()?->isAdmin(), 403);
+        $this->authorize('delete', $subject);
+
+        DB::transaction(function () use ($subject): void {
+            $this->removeSubjectRecord($subject);
+            $this->writeAudit('archive.subject_removed', 'subjects', $subject->id, ['name' => $subject->name]);
+        });
+
+        return redirect()
+            ->route('admin.archive.index')
+            ->with('success', 'Ders arsivden kaldirildi. Gecmis test ve log kayitlari korunur.');
+    }
+
+    public function removeSubjects(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'subject_ids' => ['required', 'array', 'min:1'],
+            'subject_ids.*' => ['integer', 'exists:subjects,id'],
+        ]);
+
+        $subjects = Subject::query()
+            ->whereIn('id', $validated['subject_ids'])
+            ->whereNotNull('archived_at')
+            ->get();
+
+        DB::transaction(function () use ($subjects): void {
+            $subjects->each(function (Subject $subject): void {
+                $this->removeSubjectRecord($subject);
+                $this->writeAudit('archive.subject_removed_bulk', 'subjects', $subject->id, ['name' => $subject->name]);
+            });
+        });
+
+        return redirect()
+            ->route('admin.archive.index')
+            ->with('success', $subjects->count() . ' ders arsivden kaldirildi. Gecmis test ve log kayitlari korunur.');
+    }
+
     public function restoreQuestions(Request $request): RedirectResponse
     {
         abort_unless($request->user()?->isAdmin(), 403);
@@ -149,6 +190,47 @@ class ArchiveController extends Controller
         return redirect()
             ->route('admin.archive.index')
             ->with('success', $questions->count() . ' soru arsivden geri alindi ve pasif olarak Sorular bolumune tasindi.');
+    }
+
+    public function removeQuestion(Question $question): RedirectResponse
+    {
+        abort_unless(request()->user()?->isAdmin(), 403);
+        $this->authorize('delete', $question);
+
+        DB::transaction(function () use ($question): void {
+            $this->removeQuestionRecord($question);
+            $this->writeAudit('archive.question_removed', 'questions', $question->id, ['question_text' => $question->question_text]);
+        });
+
+        return redirect()
+            ->route('admin.archive.index')
+            ->with('success', 'Soru arsivden kaldirildi. Gecmis test ve log kayitlari korunur.');
+    }
+
+    public function removeQuestions(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+
+        $validated = $request->validate([
+            'question_ids' => ['required', 'array', 'min:1'],
+            'question_ids.*' => ['integer', 'exists:questions,id'],
+        ]);
+
+        $questions = Question::query()
+            ->whereIn('id', $validated['question_ids'])
+            ->where('status', 'archived')
+            ->get();
+
+        DB::transaction(function () use ($questions): void {
+            $questions->each(function (Question $question): void {
+                $this->removeQuestionRecord($question);
+                $this->writeAudit('archive.question_removed_bulk', 'questions', $question->id, ['question_text' => $question->question_text]);
+            });
+        });
+
+        return redirect()
+            ->route('admin.archive.index')
+            ->with('success', $questions->count() . ' soru arsivden kaldirildi. Gecmis test ve log kayitlari korunur.');
     }
 
     private function restoreSubjectRecord(Subject $subject): void
@@ -190,16 +272,37 @@ class ArchiveController extends Controller
         ]);
     }
 
+    private function removeSubjectRecord(Subject $subject): void
+    {
+        $subject->questions()
+            ->where('status', 'archived')
+            ->get()
+            ->each(fn (Question $question) => $question->delete());
+
+        $subject->delete();
+    }
+
+    private function removeQuestionRecord(Question $question): void
+    {
+        if ($question->status !== 'archived') {
+            return;
+        }
+
+        $question->delete();
+    }
+
     private function writeAudit(string $action, string $entityType, int $entityId, array $newValue): void
     {
+        $isRemoved = str_contains($action, '_removed');
+
         AuditLog::query()->create([
             'actor_id' => request()->user()?->id,
             'action' => $action,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'old_value' => ['status' => 'archived'],
-            'new_value' => $newValue + ['status' => 'restored_inactive_or_active'],
-            'reason' => 'Arsivden geri alma',
+            'new_value' => $newValue + ['status' => $isRemoved ? 'removed_from_archive_soft_deleted' : 'restored_inactive_or_active'],
+            'reason' => $isRemoved ? 'Arsivden kaldirma' : 'Arsivden geri alma',
             'ip_address' => request()->ip(),
             'user_agent' => request()->userAgent(),
         ]);

@@ -106,6 +106,7 @@
                                 </div>
                             @endif
 
+                            @if(! $item->question->trashed())
                             <details class="sb-report-details mt-3" id="reportQuestion{{ $item->question_id }}" @if((string) old('question_id') === (string) $item->question_id) open @endif>
                                 <summary class="btn btn-sm btn-outline-warning">
                                     <i class="bi bi-exclamation-triangle me-1"></i> Itiraz Et
@@ -172,6 +173,11 @@
                                     </button>
                                 </form>
                             </details>
+                            @else
+                                <div class="alert alert-secondary small mt-3 mb-0">
+                                    Bu soru arsivden kaldirilmis. Gecmis test detaylari korunur, yeni itiraz veya gereksiz soru bildirimi olusturulamaz.
+                                </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>

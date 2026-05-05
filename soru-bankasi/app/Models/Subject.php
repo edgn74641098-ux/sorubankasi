@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Subject extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -22,6 +23,7 @@ class Subject extends Model
         'is_active' => 'boolean',
         'archived_at' => 'datetime',
         'purge_after' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public function questions(): HasMany

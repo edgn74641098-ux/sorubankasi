@@ -580,7 +580,7 @@ class AdminManagementTest extends TestCase
         });
     }
 
-    public function test_archive_prune_deletes_expired_unreferenced_records(): void
+    public function test_archive_prune_soft_deletes_expired_archive_records(): void
     {
         $admin = $this->createUserWithRole('admin');
         $subject = Subject::factory()->create([
@@ -598,11 +598,11 @@ class AdminManagementTest extends TestCase
         ]);
 
         $this->artisan('archive:prune')
-            ->expectsOutput('Archived cleanup completed. Questions deleted: 1, subjects deleted: 1.')
+            ->expectsOutput('Archived cleanup completed. Questions removed from archive: 1, subjects removed from archive: 1.')
             ->assertExitCode(0);
 
-        $this->assertDatabaseMissing('questions', ['id' => $question->id]);
-        $this->assertDatabaseMissing('subjects', ['id' => $subject->id]);
+        $this->assertSoftDeleted('questions', ['id' => $question->id]);
+        $this->assertSoftDeleted('subjects', ['id' => $subject->id]);
     }
 
     public function test_admin_can_view_archive_page_from_panel(): void
@@ -637,6 +637,71 @@ class AdminManagementTest extends TestCase
             ->assertSee('Arsiv Dersi')
             ->assertSee('Arsivlenen Sorular')
             ->assertSee('Arsivde gorunen soru metni');
+    }
+
+    public function test_admin_can_remove_archived_question_from_archive_without_breaking_test_history(): void
+    {
+        $admin = $this->createUserWithRole('admin');
+        $user = $this->createUserWithRole('user');
+        $subject = Subject::factory()->create([
+            'name' => 'Soft Arsiv Dersi',
+            'is_active' => false,
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        $question = Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $admin->id,
+            'approved_by' => null,
+            'status' => 'archived',
+            'question_text' => 'Arsivden kaldirilan soru gecmiste gorunur',
+            'correct_option' => 'A',
+            'archived_at' => now()->subDay(),
+            'purge_after' => now()->addDays(6),
+        ]);
+        $test = Test::query()->create([
+            'user_id' => $user->id,
+            'subject_id' => $subject->id,
+            'question_count' => 1,
+            'duration_minutes' => 30,
+            'score' => 5,
+            'correct_count' => 1,
+            'wrong_count' => 0,
+            'blank_count' => 0,
+            'started_at' => now()->subHour(),
+            'ended_at' => now(),
+            'status' => 'finished',
+            'feedback_mode' => 'DELAYED_FEEDBACK',
+            'aborted' => false,
+        ]);
+        $test->items()->create([
+            'question_id' => $question->id,
+            'user_answer' => 'A',
+            'is_correct' => true,
+            'awarded_points' => 5,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.archive.questions.remove', $question))
+            ->assertRedirect(route('admin.archive.index'));
+
+        $this->assertSoftDeleted('questions', ['id' => $question->id]);
+        $this->assertDatabaseHas('audit_logs', [
+            'actor_id' => $admin->id,
+            'action' => 'archive.question_removed',
+            'entity_type' => 'questions',
+            'entity_id' => $question->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.archive.index'))
+            ->assertOk()
+            ->assertDontSee('Arsivden kaldirilan soru gecmiste gorunur');
+
+        $this->actingAs($user)
+            ->get(route('tests.review', $test))
+            ->assertOk()
+            ->assertSee('Arsivden kaldirilan soru gecmiste gorunur');
     }
 
     public function test_admin_search_finds_core_records(): void

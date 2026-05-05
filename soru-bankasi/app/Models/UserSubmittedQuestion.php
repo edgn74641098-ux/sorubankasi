@@ -35,7 +35,7 @@ class UserSubmittedQuestion extends Model
 
     public function subject(): BelongsTo
     {
-        return $this->belongsTo(Subject::class);
+        return $this->belongsTo(Subject::class)->withTrashed();
     }
 
     public function reviewedBy(): BelongsTo
@@ -45,12 +45,12 @@ class UserSubmittedQuestion extends Model
 
     public function approvedQuestion(): BelongsTo
     {
-        return $this->belongsTo(Question::class, 'approved_question_id');
+        return $this->belongsTo(Question::class, 'approved_question_id')->withTrashed();
     }
 
     public function reportedQuestion(): BelongsTo
     {
-        return $this->belongsTo(Question::class, 'reported_question_id');
+        return $this->belongsTo(Question::class, 'reported_question_id')->withTrashed();
     }
 
     public function isUnnecessaryQuestionReport(): bool

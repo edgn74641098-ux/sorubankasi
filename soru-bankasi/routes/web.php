@@ -54,8 +54,12 @@ Route::middleware(['auth', 'verified', 'role:admin,editor'])
         Route::get('archive', [ArchiveController::class, 'index'])->name('archive.index');
         Route::post('archive/subjects/restore', [ArchiveController::class, 'restoreSubjects'])->name('archive.subjects.restore-bulk');
         Route::post('archive/questions/restore', [ArchiveController::class, 'restoreQuestions'])->name('archive.questions.restore-bulk');
+        Route::delete('archive/subjects/remove', [ArchiveController::class, 'removeSubjects'])->name('archive.subjects.remove-bulk');
+        Route::delete('archive/questions/remove', [ArchiveController::class, 'removeQuestions'])->name('archive.questions.remove-bulk');
         Route::post('archive/subjects/{subject}/restore', [ArchiveController::class, 'restoreSubject'])->name('archive.subjects.restore');
         Route::post('archive/questions/{question}/restore', [ArchiveController::class, 'restoreQuestion'])->name('archive.questions.restore');
+        Route::delete('archive/subjects/{subject}/remove', [ArchiveController::class, 'removeSubject'])->name('archive.subjects.remove');
+        Route::delete('archive/questions/{question}/remove', [ArchiveController::class, 'removeQuestion'])->name('archive.questions.remove');
 
         Route::resource('subjects', AdminSubjectController::class)
             ->except(['show']);
