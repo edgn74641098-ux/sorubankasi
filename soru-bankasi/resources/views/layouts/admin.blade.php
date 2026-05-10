@@ -29,8 +29,8 @@
         }
     @endphp
 
-    <div class="admin-shell">
-        <aside class="admin-sidebar">
+    <div class="admin-shell" id="adminShell">
+        <aside class="admin-sidebar" id="adminSidebar">
             <div class="admin-brand">
                 <a href="{{ route('admin.dashboard') }}" class="admin-brand__mark">SB</a>
                 <div>
@@ -64,6 +64,16 @@
         <div class="admin-main">
             <header class="admin-topbar">
                 <div>
+                    <button
+                        type="button"
+                        class="admin-menu-toggle"
+                        id="adminMenuToggle"
+                        aria-label="Menüyü Aç/Kapat"
+                        aria-controls="adminSidebar"
+                        aria-expanded="false"
+                    >
+                        <i class="bi bi-list fs-5"></i>
+                    </button>
                     <div class="admin-topbar__title">{{ $pageTitle ?? $title ?? 'Yonetim' }}</div>
                     <div class="admin-topbar__subtitle">Tum aktif operasyonlari ve kritik islemleri buradan takip edin.</div>
                 </div>
@@ -97,5 +107,13 @@
             @include('layouts.footer')
         </div>
     </div>
+
+    <button
+        type="button"
+        class="admin-sidebar-backdrop"
+        id="adminSidebarBackdrop"
+        hidden
+        aria-label="Menüyü Kapat"
+    ></button>
 </body>
 </html>
