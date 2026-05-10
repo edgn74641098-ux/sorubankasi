@@ -96,8 +96,24 @@ class TestFinalizeService
                     ]);
 
                     $wrongStat->wrong_count = (int) $wrongStat->wrong_count + 1;
+                    $wrongStat->consecutive_correct_count = 0;
                     $wrongStat->last_wrong_at = Carbon::now();
                     $wrongStat->save();
+                } elseif ($isCorrect) {
+                    $wrongStat = UserWrongQuestionStat::query()
+                        ->where('user_id', $test->user_id)
+                        ->where('question_id', $item->question_id)
+                        ->first();
+
+                    if ($wrongStat) {
+                        $wrongStat->consecutive_correct_count = (int) $wrongStat->consecutive_correct_count + 1;
+
+                        if ($wrongStat->consecutive_correct_count >= 3) {
+                            $wrongStat->delete();
+                        } else {
+                            $wrongStat->save();
+                        }
+                    }
                 }
 
                 $recentHistory = UserRecentQuestionHistory::query()->firstOrNew([

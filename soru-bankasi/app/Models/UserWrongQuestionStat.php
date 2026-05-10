@@ -14,6 +14,7 @@ class UserWrongQuestionStat extends Model
         'user_id',
         'question_id',
         'wrong_count',
+        'consecutive_correct_count',
         'last_wrong_at',
     ];
 

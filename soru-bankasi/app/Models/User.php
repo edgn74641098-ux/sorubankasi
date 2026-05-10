@@ -47,6 +47,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'preferred_max_difficulty',
         'preferred_exclude_solved_questions',
         'preferred_subject_id',
+        'preferred_subject_term',
     ];
 
     /**
@@ -72,6 +73,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'preferred_max_difficulty' => 'integer',
         'preferred_exclude_solved_questions' => 'boolean',
         'preferred_subject_id' => 'integer',
+        'preferred_subject_term' => 'integer',
         'deleted_at' => 'datetime',
     ];
 

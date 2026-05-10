@@ -14,12 +14,14 @@ class Subject extends Model
     protected $fillable = [
         'name',
         'slug',
+        'term',
         'is_active',
         'archived_at',
         'purge_after',
     ];
 
     protected $casts = [
+        'term' => 'integer',
         'is_active' => 'boolean',
         'archived_at' => 'datetime',
         'purge_after' => 'datetime',

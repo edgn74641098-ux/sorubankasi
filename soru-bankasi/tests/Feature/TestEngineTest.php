@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\UserRecentQuestionHistory;
 use App\Models\UserSubmittedQuestion;
 use App\Models\UserWrongQuestionStat;
+use App\Services\TestFinalizeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -294,6 +295,60 @@ class TestEngineTest extends TestCase
         $response->assertSessionHas('info');
 
         $this->assertDatabaseCount('tests', 1);
+    }
+
+    public function test_question_is_removed_from_weaknesses_after_three_consecutive_correct_answers(): void
+    {
+        $user = $this->createVerifiedUser();
+        $subject = Subject::query()->create([
+            'name' => 'Matematik',
+            'slug' => 'matematik',
+            'is_active' => true,
+        ]);
+
+        $question = $this->seedQuestions($subject, $user, 1)->first();
+        $this->assertNotNull($question);
+
+        UserWrongQuestionStat::query()->create([
+            'user_id' => $user->id,
+            'question_id' => $question->id,
+            'wrong_count' => 2,
+            'consecutive_correct_count' => 0,
+            'last_wrong_at' => now()->subDay(),
+        ]);
+
+        for ($i = 1; $i <= 3; $i++) {
+            $test = Test::query()->create([
+                'user_id' => $user->id,
+                'subject_id' => $subject->id,
+                'question_count' => 1,
+                'duration_minutes' => 30,
+                'started_at' => now()->subMinutes(5),
+                'status' => 'active',
+                'feedback_mode' => 'DELAYED_FEEDBACK',
+                'aborted' => false,
+            ]);
+
+            $test->items()->create([
+                'question_id' => $question->id,
+                'user_answer' => $question->correct_option,
+                'answered_at' => now()->subMinutes(1),
+            ]);
+
+            app(TestFinalizeService::class)->finalize($test->fresh());
+
+            $stat = UserWrongQuestionStat::query()
+                ->where('user_id', $user->id)
+                ->where('question_id', $question->id)
+                ->first();
+
+            if ($i < 3) {
+                $this->assertNotNull($stat);
+                $this->assertSame($i, (int) $stat->consecutive_correct_count);
+            } else {
+                $this->assertNull($stat);
+            }
+        }
     }
 
     public function test_expired_test_is_auto_finalized_on_show(): void

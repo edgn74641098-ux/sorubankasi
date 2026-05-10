@@ -17,13 +17,24 @@ class SubjectController extends Controller
         $this->authorize('viewAny', Subject::class);
         $finalizeService->finalizeExpiredForUser($request->user()->id);
 
+        $user = $request->user();
+        $selectedTerm = (int) $request->integer('term', (int) ($user->preferred_subject_term ?? 1));
+        if (! in_array($selectedTerm, [1, 2], true)) {
+            $selectedTerm = 1;
+        }
+
+        if ((int) ($user->preferred_subject_term ?? 1) !== $selectedTerm) {
+            $user->forceFill(['preferred_subject_term' => $selectedTerm])->save();
+        }
+
         $subjects = Subject::query()
             ->where('is_active', true)
+            ->where('term', $selectedTerm)
             ->withCount([
                 'questions as approved_questions_count' => fn ($query) => $query->where('status', 'active'),
             ])
             ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            ->get(['id', 'name', 'slug', 'term']);
 
         $weakQuestionCounts = UserWrongQuestionStat::query()
             ->join('questions', 'questions.id', '=', 'user_wrong_question_stats.question_id')
@@ -64,7 +75,6 @@ class SubjectController extends Controller
                 : null;
         });
 
-        $user = $request->user();
         $preferredMode = in_array($user->preferred_test_mode, ['RANDOM', 'DIFFICULTY_RANGE', 'WEAKNESSES'], true)
             ? $user->preferred_test_mode
             : 'RANDOM';
@@ -77,6 +87,7 @@ class SubjectController extends Controller
 
         return view('subjects.index', [
             'subjects' => $subjects,
+            'selectedTerm' => $selectedTerm,
             'preferredMode' => $preferredMode,
             'preferredMinDifficulty' => $preferredMinDifficulty,
             'preferredMaxDifficulty' => $preferredMaxDifficulty,

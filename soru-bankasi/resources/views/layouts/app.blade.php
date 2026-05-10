@@ -11,7 +11,7 @@
         <link rel="stylesheet" href="{{ asset('css/sorubank-theme.css') }}">
     </head>
     <body class="font-sans antialiased">
-        <div class="sb-app-shell min-h-screen">
+        <div class="sb-app-shell min-h-screen d-flex flex-column">
             @include('layouts.navigation')
 
             <!-- Page Heading -->
@@ -24,13 +24,15 @@
             @endif
 
             <!-- Page Content -->
-            <main>
+            <main class="flex-grow-1">
                 @isset($slot)
                     {{ $slot }}
                 @else
                     @yield('content')
                 @endisset
             </main>
+
+            @include('layouts.footer')
         </div>
     </body>
 </html>

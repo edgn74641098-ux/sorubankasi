@@ -44,7 +44,7 @@ class TestController extends Controller
 
         $subject = Subject::query()->findOrFail($validated['subject_id']);
         $this->authorize('startTest', $subject);
-        $this->persistUserPreferences($request, $validated);
+        $this->persistUserPreferences($request, $validated, $subject);
 
         try {
             $result = $this->generationService->generate($request->user(), $subject, $validated['mode'], $validated);
@@ -175,12 +175,13 @@ class TestController extends Controller
         return round(($value / $total) * 100, 1);
     }
 
-    private function persistUserPreferences(Request $request, array $validated): void
+    private function persistUserPreferences(Request $request, array $validated, Subject $subject): void
     {
         $user = $request->user();
 
         $payload = [
             'preferred_subject_id' => (int) $validated['subject_id'],
+            'preferred_subject_term' => (int) ($subject->term ?? 1),
             'preferred_test_mode' => $validated['mode'],
             'preferred_exclude_solved_questions' => (bool) ($validated['exclude_solved_questions'] ?? false),
         ];

@@ -24,10 +24,15 @@ class SubjectController extends Controller
         $this->authorize('viewAny', Subject::class);
 
         $status = $request->string('status')->value();
+        $term = (int) $request->integer('term', 1);
+        if (! in_array($term, [1, 2], true)) {
+            $term = 1;
+        }
 
         $subjects = Subject::query()
             ->withCount('questions')
             ->whereNull('archived_at')
+            ->where('term', $term)
             ->when($status === 'active', fn ($query) => $query->where('is_active', true))
             ->when($status === 'inactive', fn ($query) => $query->where('is_active', false))
             ->orderBy('name')
@@ -37,6 +42,7 @@ class SubjectController extends Controller
         return view('admin.subjects.index', [
             'subjects' => $subjects,
             'status' => $status,
+            'term' => $term,
         ]);
     }
 
@@ -53,11 +59,13 @@ class SubjectController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:subjects,name'],
+            'term' => ['required', 'integer', 'in:1,2'],
         ]);
 
         $subject = Subject::query()->create([
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($validated['name']),
+            'term' => (int) $validated['term'],
             'is_active' => true,
         ]);
 
@@ -73,7 +81,7 @@ class SubjectController extends Controller
         );
 
         return redirect()
-            ->route('admin.subjects.index')
+            ->route('admin.subjects.index', ['term' => (int) $validated['term']])
             ->with('success', 'Ders basariyla olusturuldu.');
     }
 
@@ -92,6 +100,7 @@ class SubjectController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:subjects,name,' . $subject->id],
+            'term' => ['required', 'integer', 'in:1,2'],
             'is_active' => ['required', 'boolean'],
         ]);
 
@@ -100,6 +109,7 @@ class SubjectController extends Controller
         $subject->update([
             'name' => $validated['name'],
             'slug' => $this->generateUniqueSlug($validated['name'], $subject->id),
+            'term' => (int) $validated['term'],
             'is_active' => (bool) $validated['is_active'],
             'archived_at' => null,
             'purge_after' => null,
@@ -117,7 +127,7 @@ class SubjectController extends Controller
         );
 
         return redirect()
-            ->route('admin.subjects.index')
+            ->route('admin.subjects.index', ['term' => (int) $validated['term']])
             ->with('success', 'Ders basariyla guncellendi.');
     }
 
@@ -205,6 +215,7 @@ class SubjectController extends Controller
         return [
             'name' => $subject->name,
             'slug' => $subject->slug,
+            'term' => (int) $subject->term,
             'is_active' => (bool) $subject->is_active,
             'archived_at' => $subject->archived_at?->toISOString(),
             'purge_after' => $subject->purge_after?->toISOString(),

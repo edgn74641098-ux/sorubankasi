@@ -76,11 +76,31 @@
             </div>
         @endif
 
+        <div class="card sb-dashboard-card sb-dashboard-card--neutral mb-4">
+            <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <div class="fw-semibold">Donem Secimi</div>
+                    <div class="text-muted small">Son sectiginiz donem profilde kayitli kalir.</div>
+                </div>
+                <div class="btn-group" role="group" aria-label="Donem secimi">
+                    <a href="{{ route('subjects.index', ['term' => 1, 'subject_id' => request('subject_id'), 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
+                       class="btn btn-sm {{ (int) ($selectedTerm ?? 1) === 1 ? 'btn-primary' : 'btn-outline-primary' }}">
+                        1. Donem
+                    </a>
+                    <a href="{{ route('subjects.index', ['term' => 2, 'subject_id' => request('subject_id'), 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
+                       class="btn btn-sm {{ (int) ($selectedTerm ?? 1) === 2 ? 'btn-primary' : 'btn-outline-primary' }}">
+                        2. Donem
+                    </a>
+                </div>
+            </div>
+        </div>
+
         @if($subjects->isEmpty())
             <div class="card sb-dashboard-card sb-dashboard-card--neutral">
-                <div class="card-body text-muted">Henuz aktif ders yok.</div>
+                <div class="card-body text-muted">Bu donemde aktif ders yok.</div>
             </div>
         @else
+
             <div class="row g-4">
                 <div class="col-lg-5">
                     <div class="card sb-dashboard-card sb-dashboard-card--neutral h-100">
@@ -91,7 +111,7 @@
                             <div class="vstack gap-3">
                                 @foreach($subjects as $subject)
                                     <a
-                                        href="{{ route('subjects.index', ['subject_id' => $subject->id, 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
+                                        href="{{ route('subjects.index', ['term' => ($selectedTerm ?? 1), 'subject_id' => $subject->id, 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
                                         class="text-decoration-none text-reset"
                                     >
                                         <div class="border rounded p-3 bg-white {{ (string) request('subject_id') === (string) $subject->id ? 'border-primary border-2' : '' }}">

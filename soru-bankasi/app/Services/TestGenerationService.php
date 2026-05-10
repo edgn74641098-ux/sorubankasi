@@ -235,7 +235,11 @@ class TestGenerationService
         $cooldowns = [72, 48, 24, 0];
         $selected = collect();
         $usedCooldown = 72;
-        $solvedQuestionIds = $excludeSolvedQuestions ? $this->solvedQuestionIds($user, $subject)->toArray() : [];
+        // In WEAKNESSES mode, keep wrong/tough questions in pool even when "exclude solved" is enabled.
+        // Only previously solved-correct questions (no wrong history) should be excluded from random fill.
+        $correctlySolvedQuestionIds = $excludeSolvedQuestions
+            ? $this->correctlySolvedQuestionIds($user, $subject)->toArray()
+            : [];
 
         foreach ($cooldowns as $cooldown) {
             $exclusionThreshold = Carbon::now()->subHours($cooldown);
@@ -250,7 +254,6 @@ class TestGenerationService
                 ->join('user_wrong_question_stats', 'questions.id', '=', 'user_wrong_question_stats.question_id')
                 ->where('user_wrong_question_stats.user_id', $user->id)
                 ->whereNotIn('questions.id', $recentlyAnsweredIds)
-                ->when(!empty($solvedQuestionIds), fn ($query) => $query->whereNotIn('questions.id', $solvedQuestionIds))
                 ->orderByDesc('user_wrong_question_stats.wrong_count')
                 ->orderByDesc('user_wrong_question_stats.last_wrong_at')
                 ->limit(self::QUESTION_COUNT)
@@ -267,9 +270,11 @@ class TestGenerationService
             $additional = $this->balancedQuestionSelection(
                 $user,
                 $subject,
-                fn ($query) => $query->whereNotIn('id', $wrongQuestionIds),
+                fn ($query) => $query
+                    ->whereNotIn('id', $wrongQuestionIds)
+                    ->when(!empty($correctlySolvedQuestionIds), fn ($q) => $q->whereNotIn('id', $correctlySolvedQuestionIds)),
                 self::QUESTION_COUNT - $selected->count(),
-                $excludeSolvedQuestions
+                false
             );
             $selected = $selected->concat($additional)->values();
         }
@@ -305,6 +310,18 @@ class TestGenerationService
         return UserRecentQuestionHistory::query()
             ->where('user_id', $user->id)
             ->whereRaw('(correct_count + wrong_count) > 0')
+            ->whereIn('question_id', $this->baseSubjectQuestionQuery($subject)->select('id'))
+            ->pluck('question_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+    }
+
+    private function correctlySolvedQuestionIds(User $user, Subject $subject)
+    {
+        return UserRecentQuestionHistory::query()
+            ->where('user_id', $user->id)
+            ->where('correct_count', '>', 0)
+            ->where('wrong_count', 0)
             ->whereIn('question_id', $this->baseSubjectQuestionQuery($subject)->select('id'))
             ->pluck('question_id')
             ->map(fn ($id) => (int) $id)
