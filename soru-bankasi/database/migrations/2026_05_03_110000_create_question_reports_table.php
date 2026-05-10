@@ -16,6 +16,7 @@ return new class extends Migration
                 'WRONG_ANSWER',
                 'UNCLEAR_WORDING',
                 'TYPO',
+                'WRONG_SUBJECT',
                 'OTHER'
             ])->default('OTHER');
             $table->text('note')->nullable();

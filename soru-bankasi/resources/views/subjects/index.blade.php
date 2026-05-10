@@ -91,7 +91,7 @@
                             <div class="vstack gap-3">
                                 @foreach($subjects as $subject)
                                     <a
-                                        href="{{ route('subjects.index', ['subject_id' => $subject->id, 'mode' => request('mode', 'RANDOM')]) }}"
+                                        href="{{ route('subjects.index', ['subject_id' => $subject->id, 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
                                         class="text-decoration-none text-reset"
                                     >
                                         <div class="border rounded p-3 bg-white {{ (string) request('subject_id') === (string) $subject->id ? 'border-primary border-2' : '' }}">
@@ -125,7 +125,7 @@
                             <form method="POST" action="{{ route('tests.start') }}" class="row g-4">
                                 @csrf
                                 @php
-                                    $selectedSubjectId = old('subject_id', request('subject_id', $subjects->first()?->id));
+                                    $selectedSubjectId = old('subject_id', request('subject_id', $preferredSubjectId ?? $subjects->first()?->id));
                                 @endphp
 
                                 <div class="col-12">
@@ -133,7 +133,13 @@
                                     <select id="subject_id" name="subject_id" class="form-select form-select-lg" required>
                                         <option value="">Ders secin</option>
                                         @foreach($subjects as $subject)
-                                            <option value="{{ $subject->id }}" data-weak-count="{{ $subject->weak_questions_count }}" @selected((string) $selectedSubjectId === (string) $subject->id)>
+                                            <option
+                                                value="{{ $subject->id }}"
+                                                data-weak-count="{{ $subject->weak_questions_count }}"
+                                                data-solved-unique-count="{{ $subject->solved_unique_count }}"
+                                                data-remaining-unique-count="{{ $subject->remaining_unique_count }}"
+                                                @selected((string) $selectedSubjectId === (string) $subject->id)
+                                            >
                                                 {{ $subject->name }} ({{ $subject->approved_questions_count }} soru)
                                             </option>
                                         @endforeach
@@ -141,7 +147,8 @@
                                 </div>
 
                                 @php
-                                    $selectedMode = old('mode', request('mode', 'RANDOM'));
+                                    $selectedMode = old('mode', request('mode', $preferredMode ?? 'RANDOM'));
+                                    $excludeSolvedQuestions = (bool) old('exclude_solved_questions', $preferredExcludeSolvedQuestions ?? false);
                                     $selectedSubject = $subjects->firstWhere('id', (int) $selectedSubjectId) ?? $subjects->first();
                                     $selectedWeakQuestionCount = (int) ($selectedSubject?->weak_questions_count ?? 0);
                                     $modes = [
@@ -178,6 +185,34 @@
                                     </div>
                                 </div>
 
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="exclude_solved_questions"
+                                            name="exclude_solved_questions"
+                                            value="1"
+                                            @checked($excludeSolvedQuestions)
+                                        >
+                                        <label class="form-check-label fw-semibold" for="exclude_solved_questions">
+                                            Cozdugum sorular yeni testte gelmesin
+                                        </label>
+                                        <div class="text-muted small mt-1">
+                                            Bu ayar acikken daha once cozdugunuz sorular yeni test havuzundan cikarilir.
+                                        </div>
+                                        <div class="mt-2 small">
+                                            <span class="badge text-bg-primary-subtle text-primary-emphasis me-1">
+                                                Benzersiz cozulen: <span id="solvedUniqueCount">{{ (int) ($selectedSubject?->solved_unique_count ?? 0) }}</span>
+                                            </span>
+                                            <span class="badge text-bg-success-subtle text-success-emphasis">
+                                                Kalan benzersiz: <span id="remainingUniqueCount">{{ (int) ($selectedSubject?->remaining_unique_count ?? 0) }}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="col-12 js-difficulty-range-block {{ $selectedMode === 'DIFFICULTY_RANGE' ? '' : 'd-none' }}">
                                     <div class="card sb-dashboard-card sb-dashboard-card--blue">
                                         <div class="card-body">
@@ -188,13 +223,13 @@
                                             <div class="row g-4">
                                                 <div class="col-md-6">
                                                     <label for="min_difficulty" class="form-label">Minimum zorluk</label>
-                                                    <input type="range" id="min_difficulty" name="min_difficulty" min="1" max="10" value="{{ old('min_difficulty', 3) }}" class="form-range">
-                                                    <div class="text-muted small">Secim: <span id="minDifficultyValue">{{ old('min_difficulty', 3) }}</span></div>
+                                                    <input type="range" id="min_difficulty" name="min_difficulty" min="1" max="10" value="{{ old('min_difficulty', $preferredMinDifficulty ?? 3) }}" class="form-range">
+                                                    <div class="text-muted small">Secim: <span id="minDifficultyValue">{{ old('min_difficulty', $preferredMinDifficulty ?? 3) }}</span></div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <label for="max_difficulty" class="form-label">Maksimum zorluk</label>
-                                                    <input type="range" id="max_difficulty" name="max_difficulty" min="1" max="10" value="{{ old('max_difficulty', 7) }}" class="form-range">
-                                                    <div class="text-muted small">Secim: <span id="maxDifficultyValue">{{ old('max_difficulty', 7) }}</span></div>
+                                                    <input type="range" id="max_difficulty" name="max_difficulty" min="1" max="10" value="{{ old('max_difficulty', $preferredMaxDifficulty ?? 7) }}" class="form-range">
+                                                    <div class="text-muted small">Secim: <span id="maxDifficultyValue">{{ old('max_difficulty', $preferredMaxDifficulty ?? 7) }}</span></div>
                                                 </div>
                                             </div>
                                         </div>
@@ -226,6 +261,8 @@
         const modeInputs = document.querySelectorAll('input[name="mode"]');
         const subjectSelect = document.getElementById('subject_id');
         const weakQuestionModeCount = document.getElementById('weakQuestionModeCount');
+        const solvedUniqueCount = document.getElementById('solvedUniqueCount');
+        const remainingUniqueCount = document.getElementById('remainingUniqueCount');
 
         const syncDifficultyVisibility = () => {
             const selected = document.querySelector('input[name="mode"]:checked');
@@ -245,6 +282,12 @@
 
             const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
             weakQuestionModeCount.textContent = selectedOption?.dataset.weakCount || '0';
+            if (solvedUniqueCount) {
+                solvedUniqueCount.textContent = selectedOption?.dataset.solvedUniqueCount || '0';
+            }
+            if (remainingUniqueCount) {
+                remainingUniqueCount.textContent = selectedOption?.dataset.remainingUniqueCount || '0';
+            }
         };
 
         subjectSelect?.addEventListener('change', syncWeakQuestionCount);

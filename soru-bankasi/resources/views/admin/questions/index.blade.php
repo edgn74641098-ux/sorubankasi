@@ -1,6 +1,29 @@
 @extends('layouts.admin', ['pageTitle' => 'Soru Yonetimi', 'title' => 'Soru Yonetimi'])
 
 @section('content')
+    @php
+        $sort = $filters['sort'] ?? 'created_at';
+        $direction = strtolower($filters['direction'] ?? 'desc');
+        $sortLink = function (string $column) use ($filters, $sort, $direction) {
+            $nextDirection = ($sort === $column && $direction === 'asc') ? 'desc' : 'asc';
+
+            return route('admin.questions.index', [
+                'subject_id' => $filters['subject_id'] ?? null,
+                'status' => $filters['status'] ?? null,
+                'search' => $filters['search'] ?? null,
+                'sort' => $column,
+                'direction' => $nextDirection,
+            ]);
+        };
+        $sortArrow = function (string $column) use ($sort, $direction) {
+            if ($sort !== $column) {
+                return 'bi-arrow-down-up text-muted';
+            }
+
+            return $direction === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up';
+        };
+    @endphp
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-1">Sorular</h1>
@@ -87,11 +110,37 @@
                                 <th class="sb-width-48">
                                     <input type="checkbox" class="form-check-input js-question-select-all">
                                 </th>
-                                <th>Ders</th>
-                                <th>Soru</th>
-                                <th>Zorluk</th>
-                                <th>Durum</th>
-                                <th>Versiyon</th>
+                                <th>
+                                    <a href="{{ $sortLink('subject') }}" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                        <span>Ders</span><i class="bi {{ $sortArrow('subject') }}"></i>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ $sortLink('question_text') }}" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                        <span>Soru</span><i class="bi {{ $sortArrow('question_text') }}"></i>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ $sortLink('difficulty_score') }}" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                        <span>Zorluk</span><i class="bi {{ $sortArrow('difficulty_score') }}"></i>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ $sortLink('status') }}" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                        <span>Durum</span><i class="bi {{ $sortArrow('status') }}"></i>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ $sortLink('current_version') }}" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                        <span>Versiyon</span><i class="bi {{ $sortArrow('current_version') }}"></i>
+                                    </a>
+                                </th>
+                                <th>
+                                    <a href="{{ $sortLink('created_at') }}" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                        <span>Eklenme Tarihi</span><i class="bi {{ $sortArrow('created_at') }}"></i>
+                                    </a>
+                                </th>
+                                <th>Ekleyen</th>
                                 <th class="text-end">Islemler</th>
                             </tr>
                         </thead>
@@ -113,6 +162,8 @@
                                         </span>
                                     </td>
                                     <td>v{{ $question->current_version }}</td>
+                                    <td>{{ $question->created_at?->format('d.m.Y H:i') }}</td>
+                                    <td>{{ $question->createdBy?->name ?? '-' }}</td>
                                     <td class="text-end">
                                         <a href="{{ route('admin.questions.edit', $question) }}" class="btn btn-sm btn-outline-primary">Duzenle</a>
                                         <a href="{{ route('admin.questions.versions.index', $question) }}" class="btn btn-sm btn-outline-secondary">Surumler</a>

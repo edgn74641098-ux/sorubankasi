@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class QuestionReport extends Model
 {
@@ -18,6 +18,8 @@ class QuestionReport extends Model
         'category',
         'note',
         'suggested_correct_option',
+        'suggested_subject_id',
+        'suggested_payload_json',
         'status',
         'reviewed_by',
         'reviewed_at',
@@ -27,6 +29,7 @@ class QuestionReport extends Model
 
     protected $casts = [
         'reviewed_at' => 'datetime',
+        'suggested_payload_json' => 'array',
     ];
 
     public function user(): BelongsTo
@@ -44,13 +47,19 @@ class QuestionReport extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    public function suggestedSubject(): BelongsTo
+    {
+        return $this->belongsTo(Subject::class, 'suggested_subject_id')->withTrashed();
+    }
+
     public function getCategoryLabelAttribute(): string
     {
         return match ($this->category) {
-            'WRONG_ANSWER' => 'Yanlış Cevap',
-            'UNCLEAR_WORDING' => 'İfade Belirsizliği',
-            'TYPO' => 'Yazım Hatası',
-            'OTHER' => 'Diğer',
+            'WRONG_ANSWER' => 'Yanlis Cevap',
+            'UNCLEAR_WORDING' => 'Ifade Belirsizligi',
+            'TYPO' => 'Yazim Hatasi',
+            'WRONG_SUBJECT' => 'Yanlis Ders',
+            'OTHER' => 'Diger',
             default => $this->category,
         };
     }
@@ -59,9 +68,9 @@ class QuestionReport extends Model
     {
         return match ($this->status) {
             'pending' => 'Beklemede',
-            'approved' => 'Onaylandı',
+            'approved' => 'Onaylandi',
             'rejected' => 'Reddedildi',
-            'resolved' => 'Çözüldü',
+            'resolved' => 'Cozuldu',
             default => $this->status,
         };
     }

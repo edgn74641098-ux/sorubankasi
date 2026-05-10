@@ -21,8 +21,20 @@ class ArchiveController extends Controller
         $subjectSearch = $request->string('subject_search')->value();
         $questionSearch = $request->string('question_search')->value();
         $questionSubjectId = $request->input('question_subject_id');
+        $subjectSort = $request->string('subject_sort')->value() ?: 'archived_at';
+        $subjectDirection = strtolower($request->string('subject_direction')->value() ?: 'desc');
+        $questionSort = $request->string('question_sort')->value() ?: 'archived_at';
+        $questionDirection = strtolower($request->string('question_direction')->value() ?: 'desc');
+        $questionDeleteSort = strtolower($request->string('question_delete_sort')->value() ?? 'desc');
+        $questionDeleteSort = in_array($questionDeleteSort, ['asc', 'desc'], true) ? $questionDeleteSort : 'desc';
+        $subjectAllowedSorts = ['name', 'questions_count', 'archived_at', 'purge_after'];
+        $questionAllowedSorts = ['question_text', 'subject', 'creator', 'archived_at', 'purge_after'];
+        $subjectSort = in_array($subjectSort, $subjectAllowedSorts, true) ? $subjectSort : 'archived_at';
+        $subjectDirection = in_array($subjectDirection, ['asc', 'desc'], true) ? $subjectDirection : 'desc';
+        $questionSort = in_array($questionSort, $questionAllowedSorts, true) ? $questionSort : 'archived_at';
+        $questionDirection = in_array($questionDirection, ['asc', 'desc'], true) ? $questionDirection : 'desc';
 
-        $subjects = Subject::query()
+        $subjectsQuery = Subject::query()
             ->withCount('questions')
             ->whereNotNull('archived_at')
             ->when($subjectSearch !== '', function ($query) use ($subjectSearch): void {
@@ -30,8 +42,16 @@ class ArchiveController extends Controller
                     $query->where('name', 'like', '%' . $subjectSearch . '%')
                         ->orWhere('slug', 'like', '%' . $subjectSearch . '%');
                 });
-            })
-            ->latest('archived_at')
+            });
+
+        if ($subjectSort === 'questions_count') {
+            $subjectsQuery->orderBy('questions_count', $subjectDirection);
+        } else {
+            $subjectsQuery->orderBy($subjectSort, $subjectDirection);
+        }
+
+        $subjects = $subjectsQuery
+            ->orderBy('id', 'desc')
             ->paginate(10, ['*'], 'subjects_page')
             ->withQueryString();
 
@@ -43,7 +63,7 @@ class ArchiveController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'archived_at']);
 
-        $questions = Question::query()
+        $questionsQuery = Question::query()
             ->with(['subject:id,name', 'createdBy:id,name'])
             ->where('status', 'archived')
             ->when($questionSubjectId, fn ($query) => $query->where('subject_id', $questionSubjectId))
@@ -56,8 +76,28 @@ class ArchiveController extends Controller
                         ->orWhere('option_d', 'like', '%' . $questionSearch . '%')
                         ->orWhere('option_e', 'like', '%' . $questionSearch . '%');
                 });
-            })
-            ->latest('archived_at')
+            });
+
+        if ($questionSort === 'subject') {
+            $questionsQuery->orderBy(
+                Subject::query()->select('name')->whereColumn('subjects.id', 'questions.subject_id'),
+                $questionDirection
+            );
+        } elseif ($questionSort === 'creator') {
+            $questionsQuery->orderBy(
+                \App\Models\User::query()->select('name')->whereColumn('users.id', 'questions.created_by'),
+                $questionDirection
+            );
+        } elseif ($questionSort === 'purge_after') {
+            $questionsQuery
+                ->orderByRaw('purge_after IS NULL')
+                ->orderBy('purge_after', $questionDeleteSort);
+        } else {
+            $questionsQuery->orderBy($questionSort, $questionDirection);
+        }
+
+        $questions = $questionsQuery
+            ->orderBy('id', 'desc')
             ->paginate(10, ['*'], 'questions_page')
             ->withQueryString();
 
@@ -70,6 +110,11 @@ class ArchiveController extends Controller
                 'subject_search' => $subjectSearch,
                 'question_search' => $questionSearch,
                 'question_subject_id' => $questionSubjectId,
+                'subject_sort' => $subjectSort,
+                'subject_direction' => $subjectDirection,
+                'question_sort' => $questionSort,
+                'question_direction' => $questionDirection,
+                'question_delete_sort' => $questionDeleteSort,
             ],
         ]);
     }

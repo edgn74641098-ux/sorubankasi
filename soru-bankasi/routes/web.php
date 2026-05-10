@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\QuestionController as AdminQuestionController;
+use App\Http\Controllers\Admin\DuplicateQuestionController;
 use App\Http\Controllers\Admin\QuestionImportController;
 use App\Http\Controllers\Admin\QuestionReportController as AdminQuestionReportController;
 use App\Http\Controllers\Admin\QuestionVersionController;
@@ -66,6 +67,8 @@ Route::middleware(['auth', 'verified', 'role:admin,editor'])
 
         Route::resource('questions', AdminQuestionController::class)
             ->except(['show']);
+        Route::get('questions/duplicates', [DuplicateQuestionController::class, 'index'])->name('questions.duplicates.index');
+        Route::post('questions/duplicates/archive-group', [DuplicateQuestionController::class, 'archiveGroup'])->name('questions.duplicates.archive-group');
         Route::post('questions/archive-bulk', [AdminQuestionController::class, 'archiveBulk'])->name('questions.archive-bulk');
         Route::post('questions/activate-bulk', [AdminQuestionController::class, 'activateBulk'])->name('questions.activate-bulk');
         Route::get('questions/{question}/versions', [QuestionVersionController::class, 'index'])->name('questions.versions.index');
@@ -116,6 +119,7 @@ Route::middleware(['auth', 'verified', 'system.available'])->group(function () {
     Route::get('/tests/{test}/review', [TestController::class, 'review'])->name('tests.review');
     Route::get('/leaderboard', [LeaderboardController::class, 'index'])->name('leaderboard.index');
     Route::get('/search', SearchController::class)->name('search.index');
+    Route::get('/search/pdf', [SearchController::class, 'exportPdf'])->name('search.pdf');
 
     // User submitted questions
     Route::get('/questions/submit', [UserSubmittedQuestionController::class, 'create'])->name('questions.create');

@@ -107,52 +107,11 @@
                             @endif
 
                             @if(! $item->question->trashed())
-                            <details class="sb-report-details mt-3" id="reportQuestion{{ $item->question_id }}" @if((string) old('question_id') === (string) $item->question_id) open @endif>
-                                <summary class="btn btn-sm btn-outline-warning">
-                                    <i class="bi bi-exclamation-triangle me-1"></i> Itiraz Et
-                                </summary>
-
-                                <form method="POST" action="{{ route('questions.report') }}" class="border rounded bg-white p-3 mt-3">
-                                    @csrf
-                                    <input type="hidden" name="question_id" value="{{ $item->question_id }}">
-
-                                    <div class="row g-3">
-                                        <div class="col-md-4">
-                                            <label for="report_category_{{ $item->question_id }}" class="form-label small fw-semibold">Itiraz sebebi</label>
-                                            <select id="report_category_{{ $item->question_id }}" name="category" class="form-select form-select-sm" required>
-                                                <option value="WRONG_ANSWER" @selected(old('category') === 'WRONG_ANSWER')>Yanlis cevap</option>
-                                                <option value="UNCLEAR_WORDING" @selected(old('category') === 'UNCLEAR_WORDING')>Ifade belirsiz</option>
-                                                <option value="TYPO" @selected(old('category') === 'TYPO')>Yazim hatasi</option>
-                                                <option value="OTHER" @selected(old('category') === 'OTHER')>Diger</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="col-md-4">
-                                            <label for="suggested_correct_option_{{ $item->question_id }}" class="form-label small fw-semibold">Dogru sik oneriniz</label>
-                                            <select id="suggested_correct_option_{{ $item->question_id }}" name="suggested_correct_option" class="form-select form-select-sm" required>
-                                                @foreach(['A', 'B', 'C', 'D', 'E'] as $option)
-                                                    @php($field = 'option_' . strtolower($option))
-                                                    <option value="{{ $option }}" @selected(old('suggested_correct_option', $item->user_answer ?: $item->question->correct_option) === $option)>
-                                                        {{ $option }} - {{ \Illuminate\Support\Str::limit($item->question->{$field}, 45) }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-
-                                        <div class="col-md-4 d-flex align-items-end">
-                                            <button type="submit" class="btn btn-warning btn-sm w-100">
-                                                <i class="bi bi-send me-1"></i> Itirazi Gonder
-                                            </button>
-                                        </div>
-
-                                        <div class="col-12">
-                                            <label for="report_note_{{ $item->question_id }}" class="form-label small fw-semibold">Not</label>
-                                            <textarea id="report_note_{{ $item->question_id }}" name="note" rows="2" maxlength="500" class="form-control form-control-sm" placeholder="Soruda neyin hatali oldugunu kisaca aciklayin.">{{ (string) old('question_id') === (string) $item->question_id ? old('note') : '' }}</textarea>
-                                            <div class="form-text">En fazla 500 karakter.</div>
-                                        </div>
-                                    </div>
-                                </form>
-                            </details>
+                            @include('questions.partials.report-form', [
+                                'question' => $item->question,
+                                'context' => 'review_',
+                                'suggestedCorrectOption' => $item->user_answer ?: $item->question->correct_option,
+                            ])
 
                             <details class="sb-report-details mt-2" id="unnecessaryQuestion{{ $item->question_id }}" @if($errors->has('reason')) open @endif>
                                 <summary class="btn btn-sm btn-outline-danger">

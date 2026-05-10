@@ -47,7 +47,10 @@
                                         <div class="d-flex flex-wrap align-items-center gap-2">
                                             <span class="fw-semibold">{{ $report->question->subject?->name ?? 'Ders yok' }}</span>
                                             <span class="badge text-bg-warning">{{ $report->category_label }}</span>
-                                            <span class="badge text-bg-info">Oneri: {{ $report->suggested_correct_option ?? '-' }}</span>
+                                            <span class="badge text-bg-info">Cevap Oneri: {{ $report->suggested_correct_option ?? '-' }}</span>
+                                            @if($report->suggested_subject_id)
+                                                <span class="badge text-bg-primary">Ders Oneri: {{ $report->suggestedSubject?->name ?? ('#' . $report->suggested_subject_id) }}</span>
+                                            @endif
                                             <span class="badge text-bg-{{ $report->status === 'pending' ? 'secondary' : ($report->status === 'approved' ? 'success' : 'danger') }}">
                                                 {{ $statusOptions[$report->status] ?? $report->status }}
                                             </span>
@@ -63,10 +66,81 @@
                             </div>
 
                             <div class="card-body">
+                                @php
+                                    $suggestedPayload = $report->suggested_payload_json ?? [];
+                                    $changeRows = [];
+
+                                    if (!empty($suggestedPayload)) {
+                                        $fieldLabels = [
+                                            'question_text' => 'Soru metni',
+                                            'option_a' => 'A sikki',
+                                            'option_b' => 'B sikki',
+                                            'option_c' => 'C sikki',
+                                            'option_d' => 'D sikki',
+                                            'option_e' => 'E sikki',
+                                            'explanation_text' => 'Aciklama',
+                                        ];
+
+                                        foreach ($fieldLabels as $field => $label) {
+                                            $oldValue = (string) ($report->question->{$field} ?? '');
+                                            $newValue = (string) ($suggestedPayload[$field] ?? '');
+                                            if ($newValue !== '' && $newValue !== $oldValue) {
+                                                $changeRows[] = [
+                                                    'label' => $label,
+                                                    'old' => $oldValue,
+                                                    'new' => $newValue,
+                                                ];
+                                            }
+                                        }
+                                    }
+
+                                    if ($report->suggested_correct_option && $report->suggested_correct_option !== $report->question->correct_option) {
+                                        $changeRows[] = [
+                                            'label' => 'Dogru cevap',
+                                            'old' => (string) $report->question->correct_option,
+                                            'new' => (string) $report->suggested_correct_option,
+                                        ];
+                                    }
+
+                                    if ($report->suggested_subject_id && (int) $report->suggested_subject_id !== (int) $report->question->subject_id) {
+                                        $changeRows[] = [
+                                            'label' => 'Ders',
+                                            'old' => (string) ($report->question->subject?->name ?? 'Bilinmiyor'),
+                                            'new' => (string) ($report->suggestedSubject?->name ?? ('#' . $report->suggested_subject_id)),
+                                        ];
+                                    }
+                                @endphp
+
                                 <div class="mb-3">
                                     <div class="text-muted small text-uppercase fw-semibold mb-1">Soru</div>
                                     <div class="bg-light rounded p-3">{{ $report->question->question_text }}</div>
                                 </div>
+
+                                @if(!empty($changeRows))
+                                    <div class="mb-3">
+                                        <div class="text-muted small text-uppercase fw-semibold mb-1">Degisiklik Ozeti</div>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm align-middle mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Alan</th>
+                                                        <th>Mevcut</th>
+                                                        <th>Onerilen</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($changeRows as $row)
+                                                        <tr>
+                                                            <td class="fw-semibold">{{ $row['label'] }}</td>
+                                                            <td><div class="small text-muted">{{ $row['old'] !== '' ? $row['old'] : '-' }}</div></td>
+                                                            <td><div class="small fw-semibold text-success-emphasis">{{ $row['new'] !== '' ? $row['new'] : '-' }}</div></td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                @endif
 
                                 <div class="row g-3">
                                     <div class="col-lg-6">
@@ -78,6 +152,7 @@
                                         <div class="border rounded p-3 h-100">
                                             <div>Dogru cevap: <strong>{{ $report->question->correct_option }}</strong></div>
                                             <div>Onerilen cevap: <strong>{{ $report->suggested_correct_option ?? '-' }}</strong></div>
+                                            <div>Onerilen ders: <strong>{{ $report->suggestedSubject?->name ?? '-' }}</strong></div>
                                             <div>Zorluk: <strong>{{ number_format((float) $report->question->difficulty_score, 1) }}</strong></div>
                                             <div>Durum: <strong>{{ $report->question->status }}</strong></div>
                                         </div>

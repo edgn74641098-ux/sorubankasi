@@ -32,6 +32,12 @@ class QuestionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $sort = $request->string('sort')->value();
+        $direction = strtolower($request->string('direction')->value() ?? 'desc');
+        $allowedSorts = ['subject', 'question_text', 'difficulty_score', 'status', 'current_version', 'created_at'];
+        $sort = in_array($sort, $allowedSorts, true) ? $sort : 'created_at';
+        $direction = in_array($direction, ['asc', 'desc'], true) ? $direction : 'desc';
+
         $questions = Question::query()
             ->with(['subject:id,name', 'createdBy:id,name'])
             ->where('status', '!=', 'archived')
@@ -41,8 +47,13 @@ class QuestionController extends Controller
                 fn ($query) => $query->where('status', $request->string('status')->value())
             )
             ->when($request->filled('search'), fn ($query) => $query->where('question_text', 'like', '%' . $request->string('search')->value() . '%'))
-            ->latest()
-            ->paginate(20)
+            ->when($sort === 'subject', fn ($query) => $query->orderBy(
+                Subject::query()->select('name')->whereColumn('subjects.id', 'questions.subject_id'),
+                $direction
+            ))
+            ->when($sort !== 'subject', fn ($query) => $query->orderBy($sort, $direction))
+            ->orderBy('id', 'desc')
+            ->paginate(50)
             ->withQueryString();
 
         return view('admin.questions.index', [
@@ -52,6 +63,8 @@ class QuestionController extends Controller
                 'subject_id' => $request->input('subject_id'),
                 'status' => $request->input('status'),
                 'search' => $request->input('search'),
+                'sort' => $sort,
+                'direction' => $direction,
             ],
             'statusOptions' => $this->statusOptions(),
         ]);

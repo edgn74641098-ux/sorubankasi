@@ -2,6 +2,10 @@
 
 @section('content')
     @php($pageTitle = 'Arsiv')
+    @php($subjectSort = $filters['subject_sort'] ?? 'archived_at')
+    @php($subjectDirection = strtolower($filters['subject_direction'] ?? 'desc'))
+    @php($questionSort = $filters['question_sort'] ?? 'archived_at')
+    @php($questionDirection = strtolower($filters['question_direction'] ?? 'desc'))
 
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
         <div>
@@ -11,7 +15,7 @@
     </div>
 
     <div class="row g-4">
-        <div class="col-12">
+        <div class="col-12" id="subjects-archive">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <div>
@@ -51,10 +55,26 @@
                                         @if(auth()->user()->isAdmin())
                                             <th style="width: 48px;">Sec</th>
                                         @endif
-                                        <th>Ders</th>
-                                        <th>Soru Sayisi</th>
-                                        <th>Arsivlenme</th>
-                                        <th>Otomatik Silme</th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['subject_sort' => 'name', 'subject_direction' => ($subjectSort === 'name' && $subjectDirection === 'asc') ? 'desc' : 'asc'])) }}#subjects-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Ders</span><i class="bi {{ $subjectSort === 'name' ? ($subjectDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['subject_sort' => 'questions_count', 'subject_direction' => ($subjectSort === 'questions_count' && $subjectDirection === 'asc') ? 'desc' : 'asc'])) }}#subjects-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Soru Sayisi</span><i class="bi {{ $subjectSort === 'questions_count' ? ($subjectDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['subject_sort' => 'archived_at', 'subject_direction' => ($subjectSort === 'archived_at' && $subjectDirection === 'asc') ? 'desc' : 'asc'])) }}#subjects-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Arsivlenme</span><i class="bi {{ $subjectSort === 'archived_at' ? ($subjectDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['subject_sort' => 'purge_after', 'subject_direction' => ($subjectSort === 'purge_after' && $subjectDirection === 'asc') ? 'desc' : 'asc'])) }}#subjects-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Otomatik Silme</span><i class="bi {{ $subjectSort === 'purge_after' ? ($subjectDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
                                         <th class="text-end">Islem</th>
                                     </tr>
                                 </thead>
@@ -96,13 +116,13 @@
                 </div>
                 @if($subjects->hasPages())
                     <div class="card-footer bg-white">
-                        {{ $subjects->appends(request()->except('subjects_page'))->links('pagination::bootstrap-5') }}
+                        {{ $subjects->appends(request()->except('subjects_page'))->fragment('subjects-archive')->links('pagination::bootstrap-5') }}
                     </div>
                 @endif
             </div>
         </div>
 
-        <div class="col-12">
+        <div class="col-12" id="questions-archive">
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center">
                     <div>
@@ -122,6 +142,8 @@
                 <div class="card-body border-bottom">
                     <form method="GET" action="{{ route('admin.archive.index') }}" class="row g-3 align-items-end">
                         <input type="hidden" name="subject_search" value="{{ $filters['subject_search'] }}">
+                        <input type="hidden" name="question_sort" value="{{ $filters['question_sort'] ?? 'archived_at' }}">
+                        <input type="hidden" name="question_direction" value="{{ $filters['question_direction'] ?? 'desc' }}">
                         <div class="col-md-4">
                             <label for="question_subject_id" class="form-label">Ders</label>
                             <select name="question_subject_id" id="question_subject_id" class="form-select">
@@ -137,9 +159,16 @@
                             <label for="question_search" class="form-label">Soru Ara</label>
                             <input type="text" id="question_search" name="question_search" class="form-control" value="{{ $filters['question_search'] }}" placeholder="Soru metni veya siklarda ara">
                         </div>
-                        <div class="col-md-3 d-flex gap-2">
+                        <div class="col-md-3">
+                            <label for="question_delete_sort" class="form-label">Silinme Tarihi</label>
+                            <select name="question_delete_sort" id="question_delete_sort" class="form-select">
+                                <option value="desc" @selected(($filters['question_delete_sort'] ?? 'desc') === 'desc')>Yaklasan - Uzak</option>
+                                <option value="asc" @selected(($filters['question_delete_sort'] ?? '') === 'asc')>Uzak - Yaklasan</option>
+                            </select>
+                        </div>
+                        <div class="col-md-12 d-flex gap-2">
                             <button type="submit" class="btn btn-outline-primary">Sorulari Filtrele</button>
-                            <a href="{{ route('admin.archive.index', request()->except(['question_subject_id', 'question_search', 'questions_page'])) }}" class="btn btn-outline-secondary">Temizle</a>
+                            <a href="{{ route('admin.archive.index', request()->except(['question_subject_id', 'question_search', 'question_delete_sort', 'questions_page'])) }}" class="btn btn-outline-secondary">Temizle</a>
                         </div>
                     </form>
                 </div>
@@ -154,11 +183,31 @@
                                         @if(auth()->user()->isAdmin())
                                             <th style="width: 48px;">Sec</th>
                                         @endif
-                                        <th>Soru</th>
-                                        <th>Ders</th>
-                                        <th>Ekleyen</th>
-                                        <th>Arsivlenme</th>
-                                        <th>Otomatik Silme</th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['question_sort' => 'question_text', 'question_direction' => ($questionSort === 'question_text' && $questionDirection === 'asc') ? 'desc' : 'asc'])) }}#questions-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Soru</span><i class="bi {{ $questionSort === 'question_text' ? ($questionDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['question_sort' => 'subject', 'question_direction' => ($questionSort === 'subject' && $questionDirection === 'asc') ? 'desc' : 'asc'])) }}#questions-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Ders</span><i class="bi {{ $questionSort === 'subject' ? ($questionDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['question_sort' => 'creator', 'question_direction' => ($questionSort === 'creator' && $questionDirection === 'asc') ? 'desc' : 'asc'])) }}#questions-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Ekleyen</span><i class="bi {{ $questionSort === 'creator' ? ($questionDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['question_sort' => 'archived_at', 'question_direction' => ($questionSort === 'archived_at' && $questionDirection === 'asc') ? 'desc' : 'asc'])) }}#questions-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Arsivlenme</span><i class="bi {{ $questionSort === 'archived_at' ? ($questionDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
+                                        <th>
+                                            <a href="{{ route('admin.archive.index', array_merge(request()->query(), ['question_sort' => 'purge_after', 'question_direction' => ($questionSort === 'purge_after' && $questionDirection === 'asc') ? 'desc' : 'asc'])) }}#questions-archive" class="text-decoration-none text-dark d-inline-flex align-items-center gap-1">
+                                                <span>Otomatik Silme</span><i class="bi {{ $questionSort === 'purge_after' ? ($questionDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up text-muted' }}"></i>
+                                            </a>
+                                        </th>
                                         <th class="text-end">Islem</th>
                                     </tr>
                                 </thead>
@@ -200,7 +249,7 @@
                 </div>
                 @if($questions->hasPages())
                     <div class="card-footer bg-white">
-                        {{ $questions->appends(request()->except('questions_page'))->links('pagination::bootstrap-5') }}
+                        {{ $questions->appends(request()->except('questions_page'))->fragment('questions-archive')->links('pagination::bootstrap-5') }}
                     </div>
                 @endif
             </div>

@@ -128,6 +128,95 @@ class SearchPageTest extends TestCase
             ->assertDontSee('Sifreleme ag trafiginde');
     }
 
+    public function test_subject_filter_lists_all_active_questions_when_search_is_empty_with_pagination(): void
+    {
+        $user = $this->createVerifiedUser();
+        $subject = Subject::query()->create([
+            'name' => 'Mobil Adli Bilisim',
+            'slug' => 'mobil-adli-bilisim',
+            'is_active' => true,
+        ]);
+        $otherSubject = Subject::query()->create([
+            'name' => 'Ag Guvenligi',
+            'slug' => 'ag-guvenligi',
+            'is_active' => true,
+        ]);
+
+        foreach (range(1, 55) as $index) {
+            Question::factory()->create([
+                'subject_id' => $subject->id,
+                'created_by' => $user->id,
+                'approved_by' => $user->id,
+                'question_text' => "Mobil tum soru {$index}",
+                'status' => 'active',
+                'approved_at' => now(),
+            ]);
+        }
+
+        Question::factory()->create([
+            'subject_id' => $otherSubject->id,
+            'created_by' => $user->id,
+            'approved_by' => $user->id,
+            'question_text' => 'Diger dersten soru gorunmemeli',
+            'status' => 'active',
+            'approved_at' => now(),
+        ]);
+
+        $firstPage = $this->actingAs($user)
+            ->get(route('search.index', [
+                'q' => '',
+                'subject_id' => $subject->id,
+            ]));
+
+        $firstPage
+            ->assertOk()
+            ->assertSee('Secili dersteki tum aktif sorular')
+            ->assertDontSee('Diger dersten soru gorunmemeli')
+            ->assertSee('?subject_id=' . $subject->id . '&amp;page=2#question-results', false);
+
+        $this->assertSame(50, substr_count($firstPage->getContent(), 'class="sb-stat-card"'));
+
+        $secondPage = $this->actingAs($user)
+            ->get(route('search.index', [
+                'q' => '',
+                'subject_id' => $subject->id,
+                'page' => 2,
+            ]));
+
+        $secondPage
+            ->assertOk()
+            ->assertSee('Secili dersteki tum aktif sorular');
+        $this->assertSame(5, substr_count($secondPage->getContent(), 'class="sb-stat-card"'));
+    }
+
+    public function test_user_can_download_filtered_search_results_as_pdf(): void
+    {
+        $user = $this->createVerifiedUser();
+        $subject = Subject::query()->create([
+            'name' => 'Mobil Adli Bilisim',
+            'slug' => 'mobil-adli-bilisim',
+            'is_active' => true,
+        ]);
+
+        Question::factory()->create([
+            'subject_id' => $subject->id,
+            'created_by' => $user->id,
+            'approved_by' => $user->id,
+            'question_text' => 'Faraday cantasi ne ise yarar?',
+            'status' => 'active',
+            'approved_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->get(route('search.pdf', [
+                'q' => 'Faraday',
+                'subject_id' => $subject->id,
+            ]));
+
+        $response->assertOk();
+        $response->assertHeader('content-type', 'application/pdf');
+    }
+
     private function createVerifiedUser(): User
     {
         $role = Role::query()->firstOrCreate(['name' => 'user']);

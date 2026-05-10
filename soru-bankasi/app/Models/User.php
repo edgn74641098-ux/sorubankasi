@@ -42,6 +42,11 @@ class User extends Authenticatable implements MustVerifyEmail
         'password',
         'total_score',
         'is_active',
+        'preferred_test_mode',
+        'preferred_min_difficulty',
+        'preferred_max_difficulty',
+        'preferred_exclude_solved_questions',
+        'preferred_subject_id',
     ];
 
     /**
@@ -63,6 +68,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'is_active' => 'boolean',
+        'preferred_min_difficulty' => 'integer',
+        'preferred_max_difficulty' => 'integer',
+        'preferred_exclude_solved_questions' => 'boolean',
+        'preferred_subject_id' => 'integer',
         'deleted_at' => 'datetime',
     ];
 

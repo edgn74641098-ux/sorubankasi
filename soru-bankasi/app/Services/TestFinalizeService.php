@@ -106,7 +106,9 @@ class TestFinalizeService
                 ]);
 
                 $recentHistory->last_answered_at = Carbon::now();
-                $recentHistory->attempt_count = (int) $recentHistory->attempt_count + 1;
+                if (! $isBlank) {
+                    $recentHistory->attempt_count = (int) $recentHistory->attempt_count + 1;
+                }
 
                 if ($isCorrect) {
                     $recentHistory->correct_count = (int) $recentHistory->correct_count + 1;

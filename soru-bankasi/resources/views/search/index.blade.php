@@ -42,6 +42,16 @@
                                         <i class="bi bi-search me-1"></i> Ara
                                     </button>
                                 </div>
+                                @if($showQuestions)
+                                    <div class="col-md-12">
+                                        <a
+                                            href="{{ route('search.pdf', ['q' => $term !== '' ? $term : null, 'subject_id' => $selectedSubjectId]) }}"
+                                            class="btn btn-outline-secondary btn-sm"
+                                        >
+                                            <i class="bi bi-file-earmark-pdf me-1"></i> PDF Indir
+                                        </a>
+                                    </div>
+                                @endif
                             </form>
                         </div>
                     </div>
@@ -53,14 +63,16 @@
                     <div class="card-body d-flex align-items-center justify-content-between gap-3">
                         <div>
                             <div class="text-muted small">Sonuc ozeti</div>
-                            <div class="display-6 fw-bold">{{ $term === '' ? '-' : $subjectResults->count() + $questionResults->count() }}</div>
+                            <div class="display-6 fw-bold">{{ $showQuestions ? ($subjectResults->count() + $questionResults->total()) : '-' }}</div>
                             <div class="text-muted small">
-                                @if($term === '')
+                                @if(!$showQuestions)
                                     Arama bekleniyor.
+                                @elseif($term === '' && $selectedSubjectId)
+                                    Secili dersteki tum aktif sorular listeleniyor.
                                 @elseif($selectedSubjectId)
                                     Ders filtresi aktif.
                                 @else
-                                    {{ $subjectResults->count() }} ders, {{ $questionResults->count() }} soru.
+                                    {{ $subjectResults->count() }} ders, {{ $questionResults->total() }} soru.
                                 @endif
                             </div>
                         </div>
@@ -72,7 +84,7 @@
             </div>
         </div>
 
-        @if($term === '')
+        @if(!$showQuestions)
             <div class="card sb-dashboard-card sb-dashboard-card--neutral">
                 <div class="card-body text-muted">
                     Ders filtresi secerek soru metni, siklar veya aciklama icinde arama yapabilirsiniz.
@@ -80,49 +92,58 @@
             </div>
         @else
             <div class="row g-4">
-                <div class="col-lg-4">
-                    <div class="card sb-dashboard-card sb-dashboard-card--green h-100">
-                        <div class="card-header bg-white d-flex align-items-center justify-content-between">
-                            <h2 class="h5 fw-bold mb-0"><i class="bi bi-journal-bookmark me-2 text-success"></i>Ders Havuzu</h2>
-                            <span class="badge text-bg-success">{{ $subjectResults->count() }}</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="vstack gap-3">
-                                @forelse($subjectResults as $subject)
-                                    <a href="{{ route('subjects.index', ['subject_id' => $subject->id]) }}" class="text-decoration-none text-reset">
-                                        <div class="border rounded p-3 bg-white">
-                                            <div class="fw-semibold">{{ $subject->name }}</div>
-                                            <div class="text-muted small mt-1">{{ $subject->active_questions_count }} aktif soru</div>
-                                        </div>
-                                    </a>
-                                @empty
-                                    <div class="text-muted small">Bu kelimeyle eslesen ders bulunamadi.</div>
-                                @endforelse
+                @if($term !== '')
+                    <div class="col-lg-4">
+                        <div class="card sb-dashboard-card sb-dashboard-card--green h-100">
+                            <div class="card-header bg-white d-flex align-items-center justify-content-between">
+                                <h2 class="h5 fw-bold mb-0"><i class="bi bi-journal-bookmark me-2 text-success"></i>Ders Havuzu</h2>
+                                <span class="badge text-bg-success">{{ $subjectResults->count() }}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="vstack gap-3">
+                                    @forelse($subjectResults as $subject)
+                                        <a href="{{ route('subjects.index', ['subject_id' => $subject->id]) }}" class="text-decoration-none text-reset">
+                                            <div class="border rounded p-3 bg-white">
+                                                <div class="fw-semibold">{{ $subject->name }}</div>
+                                                <div class="text-muted small mt-1">{{ $subject->active_questions_count }} aktif soru</div>
+                                            </div>
+                                        </a>
+                                    @empty
+                                        <div class="text-muted small">Bu kelimeyle eslesen ders bulunamadi.</div>
+                                    @endforelse
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                @endif
 
-                <div class="col-lg-8">
+                <div class="{{ $term !== '' ? 'col-lg-8' : 'col-12' }}">
                     <div class="card sb-dashboard-card sb-dashboard-card--brand">
+                        <div id="question-results"></div>
                         <div class="card-header bg-white d-flex align-items-center justify-content-between gap-3">
                             <div>
                                 <h2 class="h5 fw-bold mb-0"><i class="bi bi-card-text me-2 text-primary"></i>Soru Sonuclari</h2>
                                 <div class="text-muted small mt-1">
-                                    "{{ $term }}" kelimesinin gectigi aktif sorular
-                                    @if($selectedSubjectId)
-                                        · ders filtresi uygulanıyor
+                                    @if($term !== '')
+                                        "{{ $term }}" kelimesinin gectigi aktif sorular
+                                        @if($selectedSubjectId)
+                                            · ders filtresi uygulaniyor
+                                        @endif
+                                    @else
+                                        Secili dersteki tum aktif sorular
                                     @endif
                                 </div>
                             </div>
-                            <span class="badge text-bg-primary">{{ $questionResults->count() }}</span>
+                            <span class="badge text-bg-primary">{{ $questionResults->total() }}</span>
                         </div>
                         <div class="card-body">
                             <div class="vstack gap-3">
                                 @forelse($questionResults as $question)
+                                    @php($rowNumber = $questionResults->firstItem() ? $questionResults->firstItem() + $loop->index : $loop->iteration)
                                     <div class="sb-stat-card">
                                         <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-2 mb-2">
                                             <div class="d-flex flex-wrap gap-2">
+                                                <span class="badge text-bg-dark">#{{ $rowNumber }}</span>
                                                 <span class="badge text-bg-primary">{{ $question->subject?->name ?? 'Ders yok' }}</span>
                                                 <span class="badge text-bg-light text-dark border">Zorluk: {{ number_format((float) $question->difficulty_score, 1) }}</span>
                                             </div>
@@ -153,11 +174,29 @@
                                                 <span class="fw-semibold">Aciklama:</span> {{ \Illuminate\Support\Str::limit($question->explanation_text, 180) }}
                                             </div>
                                         @endif
+
+                                        @include('questions.partials.report-form', [
+                                            'question' => $question,
+                                            'context' => 'search_',
+                                            'suggestedCorrectOption' => $question->correct_option,
+                                        ])
                                     </div>
                                 @empty
-                                    <div class="text-muted">Bu kelimenin gectigi aktif soru bulunamadi.</div>
+                                    <div class="text-muted">
+                                        @if($term !== '')
+                                            Bu kelimenin gectigi aktif soru bulunamadi.
+                                        @else
+                                            Secili derste aktif soru bulunamadi.
+                                        @endif
+                                    </div>
                                 @endforelse
                             </div>
+
+                            @if($questionResults->hasPages())
+                                <div class="mt-4 d-flex justify-content-center">
+                                    {{ $questionResults->onEachSide(1)->links() }}
+                                </div>
+                            @endif
                         </div>
                     </div>
                 </div>

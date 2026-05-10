@@ -158,6 +158,49 @@ class TestEngineTest extends TestCase
             ->assertRedirect(route('subjects.index', ['mode' => 'WEAKNESSES']));
     }
 
+    public function test_user_test_mode_and_difficulty_preferences_are_persisted(): void
+    {
+        $user = $this->createVerifiedUser();
+        $subject = Subject::query()->create([
+            'name' => 'Siber Guvenlik',
+            'slug' => 'siber-guvenlik',
+            'is_active' => true,
+        ]);
+        $otherSubject = Subject::query()->create([
+            'name' => 'Yazilim Gelistirme',
+            'slug' => 'yazilim-gelistirme',
+            'is_active' => true,
+        ]);
+        $this->seedQuestions($subject, $user, 20);
+        $this->seedQuestions($otherSubject, $user, 20);
+        $this->seedFeedbackMode('DELAYED_FEEDBACK');
+
+        $this->actingAs($user)
+            ->post(route('tests.start'), [
+                'subject_id' => $otherSubject->id,
+                'mode' => 'DIFFICULTY_RANGE',
+                'min_difficulty' => 4,
+                'max_difficulty' => 8,
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('DIFFICULTY_RANGE', $user->fresh()->preferred_test_mode);
+        $this->assertSame(4, (int) $user->fresh()->preferred_min_difficulty);
+        $this->assertSame(8, (int) $user->fresh()->preferred_max_difficulty);
+        $this->assertSame($otherSubject->id, (int) $user->fresh()->preferred_subject_id);
+
+        Test::query()->delete();
+
+        $this->actingAs($user)
+            ->get(route('subjects.index'))
+            ->assertOk()
+            ->assertSee('value="DIFFICULTY_RANGE"', false)
+            ->assertSee('name="min_difficulty" min="1" max="10" value="4"', false)
+            ->assertSee('name="max_difficulty" min="1" max="10" value="8"', false)
+            ->assertSee('value="' . $otherSubject->id . '"', false)
+            ->assertSee('Yazilim Gelistirme (20 soru)');
+    }
+
     public function test_start_test_page_highlights_active_test(): void
     {
         $user = $this->createVerifiedUser();
@@ -502,6 +545,43 @@ class TestEngineTest extends TestCase
             'correct_count' => 0,
             'wrong_count' => 1,
         ]);
+    }
+
+    public function test_exclude_solved_questions_setting_removes_previously_solved_questions_from_new_test(): void
+    {
+        $user = $this->createVerifiedUser();
+        $subject = Subject::query()->create([
+            'name' => 'Ag Guvenligi',
+            'slug' => 'ag-guvenligi',
+            'is_active' => true,
+        ]);
+
+        $questions = $this->seedQuestions($subject, $user, 40);
+        $this->seedFeedbackMode('DELAYED_FEEDBACK');
+
+        $solved = $questions->take(20);
+        foreach ($solved as $question) {
+            UserRecentQuestionHistory::query()->create([
+                'user_id' => $user->id,
+                'question_id' => $question->id,
+                'last_answered_at' => now()->subDay(),
+                'attempt_count' => 1,
+                'correct_count' => 1,
+                'wrong_count' => 0,
+            ]);
+        }
+
+        $this->actingAs($user)->post(route('tests.start'), [
+            'subject_id' => $subject->id,
+            'mode' => 'RANDOM',
+            'exclude_solved_questions' => 1,
+        ])->assertRedirect();
+
+        $test = Test::query()->with('items')->latest('id')->firstOrFail();
+        $selectedIds = $test->items->pluck('question_id');
+
+        $this->assertEmpty($selectedIds->intersect($solved->pluck('id'))->all());
+        $this->assertTrue($user->fresh()->preferred_exclude_solved_questions);
     }
 
     private function createVerifiedUser(): User

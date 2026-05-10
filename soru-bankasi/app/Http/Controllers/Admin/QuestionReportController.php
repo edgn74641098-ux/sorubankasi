@@ -27,6 +27,7 @@ class QuestionReportController extends Controller
             ->with([
                 'user:id,name,email',
                 'reviewedBy:id,name,email',
+                'suggestedSubject:id,name',
                 'question:id,subject_id,question_text,correct_option,status,difficulty_score,current_version,option_a,option_b,option_c,option_d,option_e,explanation_text,approved_by,approved_at',
                 'question.subject:id,name',
             ])
@@ -98,6 +99,7 @@ class QuestionReportController extends Controller
             'WRONG_ANSWER' => 'Yanlis cevap',
             'UNCLEAR_WORDING' => 'Ifade belirsiz',
             'TYPO' => 'Yazim hatasi',
+            'WRONG_SUBJECT' => 'Yanlis ders',
             'OTHER' => 'Diger',
         ];
     }

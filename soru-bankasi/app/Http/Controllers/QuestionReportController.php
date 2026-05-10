@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Question;
 use App\Models\QuestionReport;
+use App\Models\Subject;
 use App\Services\AuditLogService;
 use App\Services\QuestionReportReviewService;
 use Illuminate\Http\JsonResponse;
@@ -82,6 +83,9 @@ class QuestionReportController extends Controller
                 'category' => $report->category,
                 'category_label' => $report->category_label,
                 'suggested_correct_option' => $report->suggested_correct_option,
+                'suggested_subject_id' => $report->suggested_subject_id,
+                'suggested_subject_name' => $report->suggestedSubject?->name,
+                'suggested_payload_json' => $report->suggested_payload_json,
                 'note' => $report->note,
                 'status' => $report->status,
                 'status_label' => $report->status_label,
@@ -104,7 +108,7 @@ class QuestionReportController extends Controller
         $this->authorize('viewAny', QuestionReport::class);
 
         $reports = QuestionReport::query()
-            ->with(['user:id,name,email', 'question:id,question_text,subject_id', 'question.subject:id,name'])
+            ->with(['user:id,name,email', 'question:id,question_text,subject_id', 'question.subject:id,name', 'suggestedSubject:id,name'])
             ->where('status', 'pending')
             ->latest('created_at')
             ->paginate(15);
@@ -126,6 +130,9 @@ class QuestionReportController extends Controller
                 'category_label' => $report->category_label,
                 'note' => $report->note,
                 'suggested_correct_option' => $report->suggested_correct_option,
+                'suggested_subject_id' => $report->suggested_subject_id,
+                'suggested_subject_name' => $report->suggestedSubject?->name,
+                'suggested_payload_json' => $report->suggested_payload_json,
                 'status' => $report->status,
                 'created_at' => $report->created_at->toIso8601String(),
             ]),
@@ -172,12 +179,33 @@ class QuestionReportController extends Controller
 
         $validated = $request->validate([
             'question_id' => ['required', 'exists:questions,id'],
-            'category' => ['required', Rule::in(['WRONG_ANSWER', 'UNCLEAR_WORDING', 'TYPO', 'OTHER'])],
-            'suggested_correct_option' => ['required', Rule::in(['A', 'B', 'C', 'D', 'E'])],
+            'category' => ['required', Rule::in(['WRONG_ANSWER', 'UNCLEAR_WORDING', 'TYPO', 'WRONG_SUBJECT', 'OTHER'])],
+            'suggested_correct_option' => [
+                Rule::requiredIf(fn () => $request->input('category') !== 'WRONG_SUBJECT'),
+                'nullable',
+                Rule::in(['A', 'B', 'C', 'D', 'E']),
+            ],
+            'suggested_subject_id' => [
+                Rule::requiredIf(fn () => $request->input('category') === 'WRONG_SUBJECT'),
+                'nullable',
+                'integer',
+                'exists:subjects,id',
+            ],
             'note' => ['nullable', 'string', 'max:500'],
+            'suggested_question_text' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:10', 'max:4000'],
+            'suggested_option_a' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:1', 'max:1000'],
+            'suggested_option_b' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:1', 'max:1000'],
+            'suggested_option_c' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:1', 'max:1000'],
+            'suggested_option_d' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:1', 'max:1000'],
+            'suggested_option_e' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:1', 'max:1000'],
+            'suggested_explanation_text' => [Rule::requiredIf(fn () => $request->input('category') === 'TYPO'), 'nullable', 'string', 'min:1', 'max:2000'],
         ]);
 
         $question = Question::query()->findOrFail($validated['question_id']);
+        $suggestedSubjectId = $validated['suggested_subject_id'] ?? null;
+        if ($suggestedSubjectId !== null && (int) $suggestedSubjectId === (int) $question->subject_id) {
+            $suggestedSubjectId = null;
+        }
 
         $existingReport = QuestionReport::query()
             ->where('user_id', $user->id)
@@ -192,12 +220,26 @@ class QuestionReportController extends Controller
             ];
         }
 
+        $suggestedPayload = $validated['category'] === 'TYPO'
+            ? [
+                'question_text' => trim((string) ($validated['suggested_question_text'] ?? '')),
+                'option_a' => trim((string) ($validated['suggested_option_a'] ?? '')),
+                'option_b' => trim((string) ($validated['suggested_option_b'] ?? '')),
+                'option_c' => trim((string) ($validated['suggested_option_c'] ?? '')),
+                'option_d' => trim((string) ($validated['suggested_option_d'] ?? '')),
+                'option_e' => trim((string) ($validated['suggested_option_e'] ?? '')),
+                'explanation_text' => trim((string) ($validated['suggested_explanation_text'] ?? '')),
+            ]
+            : null;
+
         $report = QuestionReport::query()->create([
             'user_id' => $user->id,
             'question_id' => $question->id,
             'category' => $validated['category'],
             'note' => $validated['note'] ?? null,
-            'suggested_correct_option' => $validated['suggested_correct_option'],
+            'suggested_correct_option' => $validated['suggested_correct_option'] ?? null,
+            'suggested_subject_id' => $suggestedSubjectId,
+            'suggested_payload_json' => $suggestedPayload,
             'status' => 'pending',
         ]);
 
@@ -211,7 +253,10 @@ class QuestionReportController extends Controller
                 'question_id' => $question->id,
                 'category' => $validated['category'],
                 'note' => $validated['note'] ?? null,
-                'suggested_correct_option' => $validated['suggested_correct_option'],
+                'suggested_correct_option' => $validated['suggested_correct_option'] ?? null,
+                'suggested_subject_id' => $suggestedSubjectId,
+                'suggested_subject_name' => $suggestedSubjectId ? Subject::query()->find($suggestedSubjectId)?->name : null,
+                'suggested_payload_json' => $suggestedPayload,
             ],
             "Soru itiraz edildi. Kategori: {$validated['category']}",
             $request
@@ -226,7 +271,7 @@ class QuestionReportController extends Controller
     private function myReportsQuery(Request $request)
     {
         return QuestionReport::query()
-            ->with(['question:id,subject_id,question_text,correct_option', 'question.subject:id,name', 'reviewedBy:id,name'])
+            ->with(['question:id,subject_id,question_text,correct_option', 'question.subject:id,name', 'reviewedBy:id,name', 'suggestedSubject:id,name'])
             ->where('user_id', $request->user()->id)
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->latest('created_at');

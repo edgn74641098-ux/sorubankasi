@@ -13,6 +13,7 @@
             ['label' => 'Panel', 'route' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
             ['label' => 'Dersler', 'route' => route('admin.subjects.index'), 'active' => request()->routeIs('admin.subjects.*')],
             ['label' => 'Sorular', 'route' => route('admin.questions.index'), 'active' => request()->routeIs('admin.questions.*')],
+            ['label' => 'Kopya Sorular', 'route' => route('admin.questions.duplicates.index'), 'active' => request()->routeIs('admin.questions.duplicates.*')],
             ['label' => 'Arsiv', 'route' => route('admin.archive.index'), 'active' => request()->routeIs('admin.archive.*')],
             ['label' => 'Import', 'route' => route('admin.imports.index'), 'active' => request()->routeIs('admin.imports.*')],
             ['label' => 'Oneriler', 'route' => route('admin.submissions.pending'), 'active' => request()->routeIs('admin.submissions.*')],

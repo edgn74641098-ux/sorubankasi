@@ -39,10 +39,12 @@ class TestController extends Controller
             'mode' => ['required', Rule::in(['RANDOM', 'DIFFICULTY_RANGE', 'WEAKNESSES'])],
             'min_difficulty' => ['nullable', 'integer', 'between:1,10'],
             'max_difficulty' => ['nullable', 'integer', 'between:1,10'],
+            'exclude_solved_questions' => ['nullable', 'boolean'],
         ]);
 
         $subject = Subject::query()->findOrFail($validated['subject_id']);
         $this->authorize('startTest', $subject);
+        $this->persistUserPreferences($request, $validated);
 
         try {
             $result = $this->generationService->generate($request->user(), $subject, $validated['mode'], $validated);
@@ -171,6 +173,24 @@ class TestController extends Controller
         }
 
         return round(($value / $total) * 100, 1);
+    }
+
+    private function persistUserPreferences(Request $request, array $validated): void
+    {
+        $user = $request->user();
+
+        $payload = [
+            'preferred_subject_id' => (int) $validated['subject_id'],
+            'preferred_test_mode' => $validated['mode'],
+            'preferred_exclude_solved_questions' => (bool) ($validated['exclude_solved_questions'] ?? false),
+        ];
+
+        if (($validated['mode'] ?? null) === 'DIFFICULTY_RANGE') {
+            $payload['preferred_min_difficulty'] = (int) ($validated['min_difficulty'] ?? 3);
+            $payload['preferred_max_difficulty'] = (int) ($validated['max_difficulty'] ?? 7);
+        }
+
+        $user->forceFill($payload)->save();
     }
 
     /**

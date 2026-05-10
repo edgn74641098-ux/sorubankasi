@@ -127,6 +127,9 @@
                                                     @if($report->suggested_correct_option)
                                                         <span class="badge text-bg-primary">Oneriniz: {{ $report->suggested_correct_option }}</span>
                                                     @endif
+                                                    @if($report->suggested_subject_id)
+                                                        <span class="badge text-bg-info">Ders Oneriniz: {{ $report->suggestedSubject?->name ?? ('#' . $report->suggested_subject_id) }}</span>
+                                                    @endif
                                                     <span class="text-muted small">{{ $report->created_at->format('d.m.Y H:i') }}</span>
                                                 </div>
                                                 <div class="fw-bold mb-2">{{ \Illuminate\Support\Str::limit($report->question->question_text, 120) }}</div>
@@ -174,6 +177,14 @@
                                                         <div class="card-body">
                                                             <div class="text-muted small">Sizin oneriniz</div>
                                                             <strong>{{ $report->suggested_correct_option ?? '-' }}</strong>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="card sb-dashboard-card sb-dashboard-card--gold h-100">
+                                                        <div class="card-body">
+                                                            <div class="text-muted small">Sizin ders oneriniz</div>
+                                                            <strong>{{ $report->suggestedSubject?->name ?? '-' }}</strong>
                                                         </div>
                                                     </div>
                                                 </div>

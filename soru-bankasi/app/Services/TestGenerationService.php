@@ -7,7 +7,6 @@ use App\Models\Subject;
 use App\Models\Test;
 use App\Models\TestItem;
 use App\Models\User;
-use App\Models\UserWrongQuestionStat;
 use App\Models\UserRecentQuestionHistory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,13 +15,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class TestGenerationService
 {
     public const QUESTION_COUNT = 20;
-
     public const DURATION_MINUTES = 30;
-
     private const MASTERED_MIN_ATTEMPTS = 5;
-
     private const MASTERED_MIN_ACCURACY = 0.8;
-
     private const MASTERED_MAX_RATIO_IN_TEST = 0.2;
 
     public function __construct(
@@ -32,23 +27,22 @@ class TestGenerationService
 
     public function generate(User $user, Subject $subject, string $mode, array $parameters = []): array
     {
+        $excludeSolvedQuestions = (bool) ($parameters['exclude_solved_questions'] ?? false);
         $this->ensureCanStart($user, $subject);
 
         $selection = match ($mode) {
-            'RANDOM' => $this->randomQuestions($user, $subject),
-            'DIFFICULTY_RANGE' => $this->difficultyRangeQuestions($user, $subject, $parameters),
-            'WEAKNESSES' => $this->weaknessQuestions($user, $subject),
-            default => throw $this->httpException(422, 'invalid_mode', 'Geçersiz test modu.'),
+            'RANDOM' => $this->randomQuestions($user, $subject, $excludeSolvedQuestions),
+            'DIFFICULTY_RANGE' => $this->difficultyRangeQuestions($user, $subject, $parameters, $excludeSolvedQuestions),
+            'WEAKNESSES' => $this->weaknessQuestions($user, $subject, $excludeSolvedQuestions),
+            default => throw $this->httpException(422, 'invalid_mode', 'Gecersiz test modu.'),
         };
 
         $questions = $selection['questions'];
-
         if ($questions->count() < self::QUESTION_COUNT) {
-            throw $this->httpException(422, 'mode_pool_insufficient', 'Seçilen mod için yeterli soru bulunamadı.');
+            throw $this->httpException(422, 'mode_pool_insufficient', 'Secilen mod icin yeterli soru bulunamadi.');
         }
 
         $feedbackMode = $this->settingsService->getString('test_feedback_mode', 'DELAYED_FEEDBACK');
-
         $test = DB::transaction(function () use ($user, $subject, $questions, $feedbackMode) {
             $test = Test::query()->create([
                 'user_id' => $user->id,
@@ -71,7 +65,6 @@ class TestGenerationService
             return $test->load(['subject', 'items.question']);
         });
 
-        // Check for soft limit warnings
         $dailyLimit = $this->settingsService->getInt('daily_test_limit', 20);
         $todayTestCount = Test::query()
             ->where('user_id', $user->id)
@@ -85,10 +78,7 @@ class TestGenerationService
             $message = 'Bugun cok sayida test cozdunuz.' . ($message ? ' ' . $message : '');
         }
 
-        return [
-            'test' => $test,
-            'message' => $message,
-        ];
+        return ['test' => $test, 'message' => $message];
     }
 
     private function ensureCanStart(User $user, Subject $subject): void
@@ -113,7 +103,7 @@ class TestGenerationService
             ->count();
 
         if ($activeCount < self::QUESTION_COUNT) {
-            throw $this->httpException(422, 'insufficient_questions', 'Bu derste test başlatmak için en az 20 aktif soru olmalıdır.');
+            throw $this->httpException(422, 'insufficient_questions', 'Bu derste test baslatmak icin en az 20 aktif soru olmalidir.');
         }
 
         $hasActiveTest = Test::query()
@@ -126,48 +116,46 @@ class TestGenerationService
         }
     }
 
-    private function randomQuestions(User $user, Subject $subject): array
+    private function randomQuestions(User $user, Subject $subject, bool $excludeSolvedQuestions): array
     {
         return [
-            'questions' => $this->balancedQuestionSelection($user, $subject),
+            'questions' => $this->balancedQuestionSelection($user, $subject, null, self::QUESTION_COUNT, $excludeSolvedQuestions),
             'message' => null,
         ];
     }
 
-    private function difficultyRangeQuestions(User $user, Subject $subject, array $parameters): array
+    private function difficultyRangeQuestions(User $user, Subject $subject, array $parameters, bool $excludeSolvedQuestions): array
     {
         $min = max(1, (int) ($parameters['min_difficulty'] ?? 1));
         $max = min(10, (int) ($parameters['max_difficulty'] ?? 10));
-
         if ($min > $max) {
-            throw $this->httpException(422, 'invalid_difficulty_range', 'Zorluk aralığı geçersiz.');
+            throw $this->httpException(422, 'invalid_difficulty_range', 'Zorluk araligi gecersiz.');
         }
 
         $questions = $this->balancedQuestionSelection(
             $user,
             $subject,
-            fn ($query) => $query->whereBetween('difficulty_score', [$min, $max])
+            fn ($query) => $query->whereBetween('difficulty_score', [$min, $max]),
+            self::QUESTION_COUNT,
+            $excludeSolvedQuestions
         );
 
         if ($questions->count() >= self::QUESTION_COUNT) {
-            return [
-                'questions' => $questions,
-                'message' => null,
-            ];
+            return ['questions' => $questions, 'message' => null];
         }
 
         $missing = self::QUESTION_COUNT - $questions->count();
-
         $additional = $this->balancedQuestionSelection(
             $user,
             $subject,
             fn ($query) => $query->whereNotIn('id', $questions->pluck('id')),
-            $missing
+            $missing,
+            $excludeSolvedQuestions
         );
 
         return [
             'questions' => $questions->concat($additional)->values(),
-            'message' => 'Zorluk aralığındaki sorular yetmediği için test ders havuzundan tamamlandı.',
+            'message' => 'Zorluk araligindaki sorular yetmedigi icin test ders havuzundan tamamlandi.',
         ];
     }
 
@@ -175,18 +163,18 @@ class TestGenerationService
         User $user,
         Subject $subject,
         ?callable $scope = null,
-        int $limit = self::QUESTION_COUNT
+        int $limit = self::QUESTION_COUNT,
+        bool $excludeSolvedQuestions = false
     ) {
         $masteredQuestionIds = $this->masteredQuestionIds($user, $subject);
         $maxMasteredQuestions = (int) floor($limit * self::MASTERED_MAX_RATIO_IN_TEST);
+        $solvedQuestionIds = $excludeSolvedQuestions ? $this->solvedQuestionIds($user, $subject) : collect();
 
-        $buildQuery = function () use ($subject, $scope) {
-            $query = $this->baseSubjectQuestionQuery($subject);
-
+        $buildQuery = function () use ($subject, $scope, $solvedQuestionIds) {
+            $query = $this->baseSubjectQuestionQuery($subject, $solvedQuestionIds);
             if ($scope !== null) {
                 $scope($query);
             }
-
             return $query;
         };
 
@@ -211,7 +199,6 @@ class TestGenerationService
                 ->inRandomOrder()
                 ->limit($masteredLimit)
                 ->get();
-
             $selected = $selected->concat($masteredQuestions)->unique('id')->values();
         }
 
@@ -236,73 +223,67 @@ class TestGenerationService
         return UserRecentQuestionHistory::query()
             ->where('user_id', $user->id)
             ->whereIn('question_id', $this->baseSubjectQuestionQuery($subject)->select('id'))
-            ->where('attempt_count', '>=', self::MASTERED_MIN_ATTEMPTS)
-            ->whereRaw('correct_count >= (attempt_count * ?)', [self::MASTERED_MIN_ACCURACY])
+            ->whereRaw('(correct_count + wrong_count) >= ?', [self::MASTERED_MIN_ATTEMPTS])
+            ->whereRaw('correct_count >= ((correct_count + wrong_count) * ?)', [self::MASTERED_MIN_ACCURACY])
             ->pluck('question_id')
             ->map(fn ($id) => (int) $id)
             ->values();
     }
 
-    private function weaknessQuestions(User $user, Subject $subject): array
+    private function weaknessQuestions(User $user, Subject $subject, bool $excludeSolvedQuestions): array
     {
         $cooldowns = [72, 48, 24, 0];
         $selected = collect();
         $usedCooldown = 72;
+        $solvedQuestionIds = $excludeSolvedQuestions ? $this->solvedQuestionIds($user, $subject)->toArray() : [];
 
         foreach ($cooldowns as $cooldown) {
             $exclusionThreshold = Carbon::now()->subHours($cooldown);
-
-            // Get recently answered questions (last_answered_at >= exclusion threshold)
-            // These should be excluded from the weakness pool
             $recentlyAnsweredIds = UserRecentQuestionHistory::query()
                 ->where('user_id', $user->id)
                 ->where('last_answered_at', '>=', $exclusionThreshold)
                 ->pluck('question_id')
                 ->toArray();
 
-            // Select wrong questions from this subject, excluding recently answered ones
             $selected = $this->baseSubjectQuestionQuery($subject)
                 ->select('questions.*')
                 ->join('user_wrong_question_stats', 'questions.id', '=', 'user_wrong_question_stats.question_id')
                 ->where('user_wrong_question_stats.user_id', $user->id)
                 ->whereNotIn('questions.id', $recentlyAnsweredIds)
+                ->when(!empty($solvedQuestionIds), fn ($query) => $query->whereNotIn('questions.id', $solvedQuestionIds))
                 ->orderByDesc('user_wrong_question_stats.wrong_count')
                 ->orderByDesc('user_wrong_question_stats.last_wrong_at')
                 ->limit(self::QUESTION_COUNT)
                 ->get();
 
             $usedCooldown = $cooldown;
-
             if ($selected->count() >= self::QUESTION_COUNT) {
                 break;
             }
         }
 
         $wrongQuestionIds = $selected->pluck('id');
-
         if ($selected->count() < self::QUESTION_COUNT) {
             $additional = $this->balancedQuestionSelection(
                 $user,
                 $subject,
                 fn ($query) => $query->whereNotIn('id', $wrongQuestionIds),
-                self::QUESTION_COUNT - $selected->count()
+                self::QUESTION_COUNT - $selected->count(),
+                $excludeSolvedQuestions
             );
-
             $selected = $selected->concat($additional)->values();
         }
 
         if ($selected->count() < self::QUESTION_COUNT) {
-            throw $this->httpException(422, 'mode_pool_insufficient', 'Takıldıklarım havuzunda yeterli soru bulunamadı.');
+            throw $this->httpException(422, 'mode_pool_insufficient', 'Takildiklarim havuzunda yeterli soru bulunamadi.');
         }
 
         $messageParts = [];
-
         if ($usedCooldown !== 72) {
-            $messageParts[] = "Takıldıklarım havuzu {$usedCooldown} saat bekleme kuralına düşürülerek tarandı.";
+            $messageParts[] = "Takildiklarim havuzu {$usedCooldown} saat bekleme kuralina dusurulerek tarandi.";
         }
-
         if ($wrongQuestionIds->count() < self::QUESTION_COUNT) {
-            $messageParts[] = 'Takıldıklarım havuzu rastgele sorularla tamamlandı.';
+            $messageParts[] = 'Takildiklarim havuzu rastgele sorularla tamamlandi.';
         }
 
         return [
@@ -311,11 +292,23 @@ class TestGenerationService
         ];
     }
 
-    private function baseSubjectQuestionQuery(Subject $subject)
+    private function baseSubjectQuestionQuery(Subject $subject, $excludeIds = null)
     {
         return Question::query()
             ->where('subject_id', $subject->id)
+            ->when($excludeIds !== null && count($excludeIds) > 0, fn ($query) => $query->whereNotIn('id', $excludeIds))
             ->where('status', 'active');
+    }
+
+    private function solvedQuestionIds(User $user, Subject $subject)
+    {
+        return UserRecentQuestionHistory::query()
+            ->where('user_id', $user->id)
+            ->whereRaw('(correct_count + wrong_count) > 0')
+            ->whereIn('question_id', $this->baseSubjectQuestionQuery($subject)->select('id'))
+            ->pluck('question_id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
     }
 
     private function httpException(int $status, string $error, string $message): HttpException

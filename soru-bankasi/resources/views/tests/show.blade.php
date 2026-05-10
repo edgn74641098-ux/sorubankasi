@@ -116,20 +116,54 @@
                                 <option value="WRONG_ANSWER">Yanlis cevap</option>
                                 <option value="UNCLEAR_WORDING">Ifade belirsiz</option>
                                 <option value="TYPO">Yazim hatasi</option>
+                                <option value="WRONG_SUBJECT">Yanlis ders</option>
                                 <option value="OTHER">Diger</option>
                             </select>
                         </div>
 
-                        <div class="mb-3">
+                        <div class="mb-3" id="reportCorrectOptionWrap">
                             <label for="suggestedCorrectOption" class="form-label">Dogru sik oneriniz</label>
                             <select id="suggestedCorrectOption" name="suggested_correct_option" class="form-select" required>
+                                <option value="" @selected(old('suggested_correct_option') === null)>Seciniz</option>
                                 @foreach(['A', 'B', 'C', 'D', 'E'] as $option)
                                     @php($field = 'option_' . strtolower($option))
-                                    <option value="{{ $option }}" @selected(($item->user_answer ?: $item->question->correct_option) === $option)>
+                                    <option value="{{ $option }}" @selected(old('suggested_correct_option') === $option)>
                                         {{ $option }} - {{ \Illuminate\Support\Str::limit($item->question->{$field}, 55) }}
                                     </option>
                                 @endforeach
                             </select>
+                        </div>
+
+                        <div class="mb-3 d-none" id="reportSubjectWrap">
+                            <label for="suggestedSubject" class="form-label">Dogru ders oneriniz</label>
+                            <select id="suggestedSubject" name="suggested_subject_id" class="form-select">
+                                <option value="">Ders secin</option>
+                                @foreach(\App\Models\Subject::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']) as $subjectOption)
+                                    <option value="{{ $subjectOption->id }}">{{ $subjectOption->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="mb-3 d-none" id="reportTypoWrap">
+                            <div class="border rounded p-3 bg-light">
+                                <div class="fw-semibold mb-2">Duzenlenmis Soru Oneriniz</div>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <label for="suggestedQuestionText" class="form-label">Soru metni</label>
+                                        <textarea id="suggestedQuestionText" name="suggested_question_text" rows="3" class="form-control report-typo-field">{{ $item->question->question_text }}</textarea>
+                                    </div>
+                                    @foreach(['a', 'b', 'c', 'd', 'e'] as $opt)
+                                        <div class="col-md-6">
+                                            <label for="suggestedOption{{ strtoupper($opt) }}" class="form-label">{{ strtoupper($opt) }}</label>
+                                            <input id="suggestedOption{{ strtoupper($opt) }}" type="text" name="suggested_option_{{ $opt }}" value="{{ $item->question->{'option_'.$opt} }}" class="form-control report-typo-field">
+                                        </div>
+                                    @endforeach
+                                    <div class="col-12">
+                                        <label for="suggestedExplanationText" class="form-label">Aciklama</label>
+                                        <textarea id="suggestedExplanationText" name="suggested_explanation_text" rows="2" class="form-control report-typo-field">{{ $item->question->explanation_text }}</textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div>
@@ -197,9 +231,32 @@
 
         const noteTextarea = document.getElementById('reportNote');
         const charCount = document.getElementById('charCount');
+        const reportCategory = document.getElementById('reportCategory');
+        const reportCorrectOptionWrap = document.getElementById('reportCorrectOptionWrap');
+        const reportCorrectOption = document.getElementById('suggestedCorrectOption');
+        const reportSubjectWrap = document.getElementById('reportSubjectWrap');
+        const reportSubject = document.getElementById('suggestedSubject');
+        const reportTypoWrap = document.getElementById('reportTypoWrap');
+        const reportTypoFields = document.querySelectorAll('.report-typo-field');
 
         noteTextarea.addEventListener('input', () => {
             charCount.textContent = noteTextarea.value.length;
         });
+
+        const syncReportFields = () => {
+            const wrongSubject = reportCategory.value === 'WRONG_SUBJECT';
+            const typoCategory = reportCategory.value === 'TYPO';
+            reportCorrectOptionWrap.classList.toggle('d-none', wrongSubject);
+            reportCorrectOption.required = !wrongSubject;
+            reportSubjectWrap.classList.toggle('d-none', !wrongSubject);
+            reportSubject.required = wrongSubject;
+            reportTypoWrap.classList.toggle('d-none', !typoCategory);
+            reportTypoFields.forEach((field) => {
+                field.required = typoCategory;
+            });
+        };
+
+        reportCategory.addEventListener('change', syncReportFields);
+        syncReportFields();
     </script>
 </x-app-layout>
