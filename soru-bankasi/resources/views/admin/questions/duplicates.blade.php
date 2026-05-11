@@ -28,15 +28,36 @@
                     <label for="threshold" class="form-label">Esik (%)</label>
                     <input type="number" id="threshold" name="threshold" class="form-control" min="70" max="99" value="{{ (int) ($filters['threshold'] ?? 86) }}">
                 </div>
+                <div class="col-md-2">
+                    <label for="max_questions" class="form-label">Tarama limiti</label>
+                    <input type="number" id="max_questions" name="max_questions" class="form-control" min="200" max="4000" value="{{ (int) ($filters['max_questions'] ?? 1200) }}">
+                </div>
                 <div class="col-md-12 d-flex align-items-end gap-2">
-                    <button type="submit" class="btn btn-outline-primary">Filtrele</button>
+                    <input type="hidden" name="run_scan" value="1">
+                    <button type="submit" class="btn btn-primary">Kopya Sorulari Tespit Et</button>
                     <a href="{{ route('admin.questions.duplicates.index') }}" class="btn btn-outline-secondary">Temizle</a>
                 </div>
             </form>
 
-            @if($duplicateGroups->isEmpty())
+            @if(empty($filters['run_scan']))
+                <div class="alert alert-info mb-3">
+                    Filtreleri belirleyip <strong>Kopya Sorulari Tespit Et</strong> butonuna basin.
+                </div>
+            @endif
+
+            @if(!empty($scanMeta))
+                <div class="alert alert-secondary py-2 small">
+                    Taranan soru: <strong>{{ $scanMeta['scanned_questions'] ?? 0 }}</strong>,
+                    karsilastirma: <strong>{{ $scanMeta['comparisons'] ?? 0 }}</strong>.
+                    @if(!empty($scanMeta['truncated']))
+                        <span class="text-danger fw-semibold">Performans icin tarama sinirlandi (kismi sonuc).</span>
+                    @endif
+                </div>
+            @endif
+
+            @if(!empty($filters['run_scan']) && $duplicateGroups->isEmpty())
                 <div class="alert alert-info mb-0">Bu filtrede kopya soru grubu bulunamadi.</div>
-            @else
+            @elseif(!empty($filters['run_scan']))
                 <div class="d-grid gap-3">
                     @foreach($duplicateGroups as $groupIndex => $group)
                         @php($defaultKeepId = $group['questions']->first()->id)

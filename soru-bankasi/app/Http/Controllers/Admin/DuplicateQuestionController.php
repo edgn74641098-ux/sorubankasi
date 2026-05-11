@@ -17,6 +17,12 @@ use Illuminate\View\View;
 
 class DuplicateQuestionController extends Controller
 {
+    private const DEFAULT_MAX_QUESTIONS_ALL = 1200;
+    private const DEFAULT_MAX_QUESTIONS_SUBJECT = 2000;
+    private const DEFAULT_MAX_PER_SUBJECT = 700;
+    private const DEFAULT_MAX_CANDIDATES_PER_QUESTION = 60;
+    private const DEFAULT_MAX_COMPARISONS = 30000;
+
     public function __construct(
         private readonly SettingsService $settingsService,
         private readonly AuditLogService $auditLog
@@ -30,6 +36,17 @@ class DuplicateQuestionController extends Controller
         $subjectId = $request->integer('subject_id');
         $search = trim((string) $request->input('search', ''));
         $threshold = max(70, min(99, $request->integer('threshold', 86)));
+        $runScan = (bool) $request->boolean('run_scan', false);
+        $maxQuestions = max(
+            200,
+            min(
+                4000,
+                $request->integer(
+                    'max_questions',
+                    $subjectId > 0 ? self::DEFAULT_MAX_QUESTIONS_SUBJECT : self::DEFAULT_MAX_QUESTIONS_ALL
+                )
+            )
+        );
         $page = max(1, (int) $request->input('page', 1));
         $perPage = 20;
 
@@ -38,28 +55,35 @@ class DuplicateQuestionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $questions = Question::query()
-            ->with('subject:id,name')
-            ->where('status', '!=', 'archived')
-            ->when($subjectId > 0, fn ($query) => $query->where('subject_id', $subjectId))
-            ->when($search !== '', fn ($query) => $query->where('question_text', 'like', '%' . $search . '%'))
-            ->orderBy('subject_id')
-            ->orderBy('id')
-            ->get([
-                'id',
-                'subject_id',
-                'question_text',
-                'option_a',
-                'option_b',
-                'option_c',
-                'option_d',
-                'option_e',
-                'status',
-                'current_version',
-                'created_at',
-            ]);
+        $groups = collect();
+        $scanMeta = null;
 
-        $groups = $this->buildDuplicateGroups($questions, $threshold);
+        if ($runScan) {
+            $questions = Question::query()
+                ->with('subject:id,name')
+                ->where('status', '!=', 'archived')
+                ->when($subjectId > 0, fn ($query) => $query->where('subject_id', $subjectId))
+                ->when($search !== '', fn ($query) => $query->where('question_text', 'like', '%' . $search . '%'))
+                ->orderBy('subject_id')
+                ->orderBy('id')
+                ->limit($maxQuestions)
+                ->get([
+                    'id',
+                    'subject_id',
+                    'question_text',
+                    'option_a',
+                    'option_b',
+                    'option_c',
+                    'option_d',
+                    'option_e',
+                    'status',
+                    'current_version',
+                    'created_at',
+                ]);
+
+            [$groups, $scanMeta] = $this->buildDuplicateGroups($questions, $threshold);
+        }
+
         $total = $groups->count();
         $offset = ($page - 1) * $perPage;
         $pageItems = $groups->slice($offset, $perPage)->values();
@@ -79,7 +103,10 @@ class DuplicateQuestionController extends Controller
                 'subject_id' => $subjectId > 0 ? $subjectId : null,
                 'search' => $search,
                 'threshold' => $threshold,
+                'max_questions' => $maxQuestions,
+                'run_scan' => $runScan,
             ],
+            'scanMeta' => $scanMeta,
         ]);
     }
 
@@ -132,12 +159,17 @@ class DuplicateQuestionController extends Controller
         return back()->with('success', $questions->count() . ' kopya soru arsive tasindi.');
     }
 
-    private function buildDuplicateGroups(Collection $questions, int $threshold): Collection
+    private function buildDuplicateGroups(Collection $questions, int $threshold): array
     {
         $groups = collect();
+        $totalComparisons = 0;
+        $truncated = false;
 
         foreach ($questions->groupBy('subject_id') as $subjectQuestions) {
-            $subjectQuestions = $subjectQuestions->values();
+            $subjectQuestions = $subjectQuestions
+                ->sortBy('id')
+                ->take(self::DEFAULT_MAX_PER_SUBJECT)
+                ->values();
             $count = $subjectQuestions->count();
             if ($count < 2) {
                 continue;
@@ -167,7 +199,7 @@ class DuplicateQuestionController extends Controller
             foreach ($subjectQuestions as $question) {
                 $id = $question->id;
                 $candidateHits = [];
-                foreach (array_slice($tokenMap[$id], 0, 18) as $token) {
+                foreach (array_slice($tokenMap[$id], 0, 12) as $token) {
                     foreach ($inverted[$token] ?? [] as $candidateId) {
                         if ($candidateId !== $id) {
                             $candidateHits[$candidateId] = ($candidateHits[$candidateId] ?? 0) + 1;
@@ -175,7 +207,10 @@ class DuplicateQuestionController extends Controller
                     }
                 }
 
-                foreach ($candidateHits as $candidateId => $sharedTokenCount) {
+                arsort($candidateHits);
+                $limitedCandidates = array_slice($candidateHits, 0, self::DEFAULT_MAX_CANDIDATES_PER_QUESTION, true);
+
+                foreach ($limitedCandidates as $candidateId => $sharedTokenCount) {
                     // Avoid scoring very weak candidates.
                     if ($sharedTokenCount < 2) {
                         continue;
@@ -188,6 +223,11 @@ class DuplicateQuestionController extends Controller
                         continue;
                     }
                     $compared[$pairKey] = true;
+                    $totalComparisons++;
+                    if ($totalComparisons > self::DEFAULT_MAX_COMPARISONS) {
+                        $truncated = true;
+                        break 3;
+                    }
 
                     $score = $this->similarityScore(
                         $textMap[$id],
@@ -244,10 +284,21 @@ class DuplicateQuestionController extends Controller
             }
         }
 
-        return $groups
+        $result = $groups
             ->sortByDesc('max_similarity')
             ->sortByDesc('count')
             ->values();
+
+        return [
+            $result,
+            [
+                'truncated' => $truncated,
+                'scanned_questions' => $questions->count(),
+                'comparisons' => $totalComparisons,
+                'max_questions' => self::DEFAULT_MAX_QUESTIONS_ALL,
+                'max_per_subject' => self::DEFAULT_MAX_PER_SUBJECT,
+            ],
+        ];
     }
 
     private function normalizedText(string $value): string
