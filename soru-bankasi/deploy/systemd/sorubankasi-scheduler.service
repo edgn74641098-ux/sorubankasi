@@ -1,0 +1,16 @@
+[Unit]
+Description=SoruBankasi Laravel Scheduler
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/soru-bankasi/soru-bankasi
+ExecStart=/usr/bin/php artisan schedule:work
+StandardOutput=append:/var/www/soru-bankasi/soru-bankasi/storage/logs/scheduler.log
+StandardError=append:/var/www/soru-bankasi/soru-bankasi/storage/logs/scheduler.log
+
+[Install]
+WantedBy=multi-user.target

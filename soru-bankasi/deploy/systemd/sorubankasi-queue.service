@@ -1,0 +1,16 @@
+[Unit]
+Description=SoruBankasi Laravel Queue Worker
+After=network.target mysql.service
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+RestartSec=5
+WorkingDirectory=/var/www/soru-bankasi/soru-bankasi
+ExecStart=/usr/bin/php artisan queue:work database --queue=default --sleep=1 --tries=3 --timeout=120
+StandardOutput=append:/var/www/soru-bankasi/soru-bankasi/storage/logs/queue-worker.log
+StandardError=append:/var/www/soru-bankasi/soru-bankasi/storage/logs/queue-worker.log
+
+[Install]
+WantedBy=multi-user.target
