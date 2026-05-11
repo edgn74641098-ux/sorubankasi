@@ -4,7 +4,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h3 mb-1">Kopya Soru Temizligi</h1>
-            <p class="text-muted mb-0">Ayni ders icinde metni birebir ayni olan sorulari grup halinde gorebilir ve arsive tasiyabilirsiniz.</p>
+            <p class="text-muted mb-0">Ayni ders icinde metin benzerligi yuksek sorulari grup halinde gorebilir ve arsive tasiyabilirsiniz.</p>
         </div>
     </div>
 
@@ -24,7 +24,11 @@
                     <label for="search" class="form-label">Soru Metninde Ara</label>
                     <input type="text" id="search" name="search" class="form-control" value="{{ $filters['search'] ?? '' }}" placeholder="Kelime girin">
                 </div>
-                <div class="col-md-2 d-flex align-items-end gap-2">
+                <div class="col-md-2">
+                    <label for="threshold" class="form-label">Esik (%)</label>
+                    <input type="number" id="threshold" name="threshold" class="form-control" min="70" max="99" value="{{ (int) ($filters['threshold'] ?? 86) }}">
+                </div>
+                <div class="col-md-12 d-flex align-items-end gap-2">
                     <button type="submit" class="btn btn-outline-primary">Filtrele</button>
                     <a href="{{ route('admin.questions.duplicates.index') }}" class="btn btn-outline-secondary">Temizle</a>
                 </div>
@@ -40,7 +44,10 @@
                             <div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
                                 <div>
                                     <div class="fw-semibold">{{ $group['subject_name'] }}</div>
-                                    <div class="text-muted small">{{ $group['count'] }} adet kopya soru bulundu.</div>
+                                    <div class="text-muted small">
+                                        {{ $group['count'] }} adet benzer soru bulundu.
+                                        (Skor araligi: %{{ $group['min_similarity'] }} - %{{ $group['max_similarity'] }})
+                                    </div>
                                 </div>
                                 <div class="text-muted small">Ornek metin: {{ \Illuminate\Support\Str::limit($group['canonical_text'], 160) }}</div>
                             </div>
@@ -55,6 +62,7 @@
                                                     <th class="sb-width-48">Tut</th>
                                                     <th>ID</th>
                                                     <th>Soru</th>
+                                                    <th>Benzerlik</th>
                                                     <th>Durum</th>
                                                     <th>Versiyon</th>
                                                     <th class="text-end">Incele</th>
@@ -76,6 +84,11 @@
                                                         </td>
                                                         <td>{{ $question->id }}</td>
                                                         <td>{{ \Illuminate\Support\Str::limit($question->question_text, 180) }}</td>
+                                                        <td>
+                                                            <span class="badge text-bg-{{ ($question->duplicate_similarity ?? 0) >= 95 ? 'danger' : (($question->duplicate_similarity ?? 0) >= 90 ? 'warning' : 'info') }}">
+                                                                %{{ (int) ($question->duplicate_similarity ?? 0) }}
+                                                            </span>
+                                                        </td>
                                                         <td>
                                                             <span class="badge text-bg-{{ $question->status === 'active' ? 'success' : 'secondary' }}">
                                                                 {{ $question->status }}
