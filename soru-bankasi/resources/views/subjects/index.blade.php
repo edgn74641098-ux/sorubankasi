@@ -83,11 +83,11 @@
                     <div class="text-muted small">Son sectiginiz donem profilde kayitli kalir.</div>
                 </div>
                 <div class="btn-group" role="group" aria-label="Donem secimi">
-                    <a href="{{ route('subjects.index', ['term' => 1, 'subject_id' => request('subject_id'), 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
+                    <a href="{{ route('subjects.index', ['term' => 1]) }}"
                        class="btn btn-sm {{ (int) ($selectedTerm ?? 1) === 1 ? 'btn-primary' : 'btn-outline-primary' }}">
                         1. Donem
                     </a>
-                    <a href="{{ route('subjects.index', ['term' => 2, 'subject_id' => request('subject_id'), 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
+                    <a href="{{ route('subjects.index', ['term' => 2]) }}"
                        class="btn btn-sm {{ (int) ($selectedTerm ?? 1) === 2 ? 'btn-primary' : 'btn-outline-primary' }}">
                         2. Donem
                     </a>
@@ -111,7 +111,7 @@
                             <div class="vstack gap-3">
                                 @foreach($subjects as $subject)
                                     <a
-                                        href="{{ route('subjects.index', ['term' => ($selectedTerm ?? 1), 'subject_id' => $subject->id, 'mode' => old('mode', request('mode', $preferredMode ?? 'RANDOM'))]) }}"
+                                        href="{{ route('subjects.index', ['term' => ($selectedTerm ?? 1), 'subject_id' => $subject->id]) }}"
                                         class="text-decoration-none text-reset"
                                     >
                                         <div class="border rounded p-3 bg-white {{ (string) request('subject_id') === (string) $subject->id ? 'border-primary border-2' : '' }}">

@@ -18,9 +18,14 @@ class SubjectController extends Controller
         $finalizeService->finalizeExpiredForUser($request->user()->id);
 
         $user = $request->user();
-        $selectedTerm = (int) $request->integer('term', (int) ($user->preferred_subject_term ?? 1));
-        if (! in_array($selectedTerm, [1, 2], true)) {
-            $selectedTerm = 1;
+        $termFromQuery = $request->query('term');
+        if ($termFromQuery !== null && in_array((string) $termFromQuery, ['1', '2'], true)) {
+            $selectedTerm = (int) $termFromQuery;
+        } else {
+            $selectedTerm = (int) ($user->preferred_subject_term ?? 1);
+            if (! in_array($selectedTerm, [1, 2], true)) {
+                $selectedTerm = 1;
+            }
         }
 
         if ((int) ($user->preferred_subject_term ?? 1) !== $selectedTerm) {

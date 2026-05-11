@@ -113,15 +113,15 @@
                                 [$statusLabel, $statusClass, $cardClass, $statusIcon] = $statusMeta[$report->status] ?? [$statusOptions[$report->status] ?? $report->status, 'secondary', 'sb-dashboard-card--neutral', 'bi-question-circle'];
                             @endphp
 
-                            <div class="card sb-dashboard-card {{ $cardClass }}">
+                            <div class="card sb-dashboard-card sb-report-item {{ $cardClass }}">
                                 <div class="card-body">
-                                    <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3">
-                                        <div class="d-flex align-items-start gap-3">
+                                    <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3 sb-report-item__row">
+                                        <div class="d-flex align-items-start gap-3 sb-report-item__main">
                                             <div class="rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px;">
                                                 <i class="bi {{ $statusIcon }} fs-4"></i>
                                             </div>
-                                            <div>
-                                                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                            <div class="sb-report-item__content">
+                                                <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sb-report-item__badges">
                                                     <span class="badge text-bg-secondary">{{ $report->question->subject?->name ?? '-' }}</span>
                                                     <span class="badge text-bg-{{ $statusClass }}">{{ $statusOptions[$report->status] ?? $statusLabel }}</span>
                                                     @if($report->suggested_correct_option)
@@ -132,13 +132,13 @@
                                                     @endif
                                                     <span class="text-muted small">{{ $report->created_at->format('d.m.Y H:i') }}</span>
                                                 </div>
-                                                <div class="fw-bold mb-2">{{ \Illuminate\Support\Str::limit($report->question->question_text, 120) }}</div>
+                                                <div class="fw-bold mb-2 sb-report-item__question">{{ \Illuminate\Support\Str::limit($report->question->question_text, 120) }}</div>
                                                 @if($report->user_message)
-                                                    <div class="text-success small fw-semibold">{{ \Illuminate\Support\Str::limit($report->user_message, 140) }}</div>
+                                                    <div class="text-success small fw-semibold sb-report-item__note">{{ \Illuminate\Support\Str::limit($report->user_message, 140) }}</div>
                                                 @elseif($report->review_note)
-                                                    <div class="text-muted small">{{ \Illuminate\Support\Str::limit($report->review_note, 140) }}</div>
+                                                    <div class="text-muted small sb-report-item__note">{{ \Illuminate\Support\Str::limit($report->review_note, 140) }}</div>
                                                 @else
-                                                    <div class="text-muted small">Itiraziniz henuz incelenmedi.</div>
+                                                    <div class="text-muted small sb-report-item__note">Itiraziniz henuz incelenmedi.</div>
                                                 @endif
                                             </div>
                                         </div>
