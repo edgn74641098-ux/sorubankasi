@@ -108,6 +108,7 @@ class TestController extends Controller
             'answer' => ['nullable', Rule::in(['A', 'B', 'C', 'D', 'E'])],
             'current_index' => ['required', 'integer', 'min:1'],
             'action' => ['nullable', Rule::in(['next', 'prev', 'stay'])],
+            'scroll_y' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $testItem = $test->items->firstWhere('id', $validated['test_item_id']);
@@ -136,7 +137,11 @@ class TestController extends Controller
         };
 
         return redirect()
-            ->route('tests.show', ['test' => $test->id, 'q' => $nextIndex])
+            ->route('tests.show', [
+                'test' => $test->id,
+                'q' => $nextIndex,
+                'scroll' => (int) ($validated['scroll_y'] ?? 0),
+            ])
             ->with('answer_feedback', $result);
     }
 

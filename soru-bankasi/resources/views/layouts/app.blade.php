@@ -9,6 +9,7 @@
 
         @vite(['resources/css/app.css', 'resources/css/admin.css', 'resources/js/app.js', 'resources/js/admin.js'])
         <link rel="stylesheet" href="{{ asset('css/sorubank-theme.css') }}">
+        @stack('head')
     </head>
     <body class="font-sans antialiased">
         <div class="sb-app-shell min-h-screen d-flex flex-column">

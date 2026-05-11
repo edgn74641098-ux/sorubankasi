@@ -3,6 +3,30 @@
         <h1 class="sb-page-title">{{ $test->subject->name }} Testi</h1>
     </x-slot>
 
+    @php($restoreScroll = max(0, (int) request()->integer('scroll', 0)))
+    @push('head')
+        @if($restoreScroll > 0)
+            <style>
+                html.sb-test-restore-lock body { visibility: hidden; }
+            </style>
+            <script>
+                (() => {
+                    const targetY = {{ $restoreScroll }};
+                    if (!Number.isFinite(targetY) || targetY <= 0) return;
+                    document.documentElement.classList.add('sb-test-restore-lock');
+                    history.scrollRestoration = 'manual';
+                    window.scrollTo(0, targetY);
+                    const unlock = () => {
+                        window.scrollTo(0, targetY);
+                        document.documentElement.classList.remove('sb-test-restore-lock');
+                    };
+                    window.addEventListener('DOMContentLoaded', unlock, { once: true });
+                    window.addEventListener('load', unlock, { once: true });
+                })();
+            </script>
+        @endif
+    @endpush
+
     <div class="container sb-page">
         <div class="row justify-content-center">
             <div class="col-lg-10">
@@ -56,6 +80,7 @@
                             @csrf
                             <input type="hidden" name="test_item_id" value="{{ $item->id }}">
                             <input type="hidden" name="current_index" value="{{ $currentIndex }}">
+                            <input type="hidden" name="scroll_y" id="scrollYInput" value="0">
 
                             <div class="vstack gap-3">
                                 @foreach(['A', 'B', 'C', 'D', 'E'] as $option)
@@ -231,6 +256,8 @@
 
         const noteTextarea = document.getElementById('reportNote');
         const charCount = document.getElementById('charCount');
+        const scrollYInput = document.getElementById('scrollYInput');
+        const answerForm = document.querySelector('form[action="{{ route('tests.answer', $test) }}"]');
         const reportCategory = document.getElementById('reportCategory');
         const reportCorrectOptionWrap = document.getElementById('reportCorrectOptionWrap');
         const reportCorrectOption = document.getElementById('suggestedCorrectOption');
@@ -258,5 +285,12 @@
 
         reportCategory.addEventListener('change', syncReportFields);
         syncReportFields();
+
+        if (answerForm && scrollYInput) {
+            answerForm.addEventListener('submit', () => {
+                scrollYInput.value = String(Math.max(0, Math.round(window.scrollY)));
+            });
+        }
+
     </script>
 </x-app-layout>

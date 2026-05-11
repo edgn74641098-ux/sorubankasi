@@ -1,176 +1,162 @@
-@extends('layouts.app')
+<x-app-layout>
+    <x-slot name="header">
+        <h1 class="sb-page-title">Soru Oner</h1>
+    </x-slot>
 
-@section('content')
-<div class="container py-5">
-    <div class="row">
-        <div class="col-md-8 offset-md-2">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h3 class="mb-0">Soru Öner</h3>
-                    <small>Sistemde yayınlanacak yeni sorular önerebilirsiniz.</small>
-                </div>
-                <div class="card-body">
-                    {{-- Info Message --}}
-                    <div class="alert alert-info" role="alert">
-                        <strong>Bilgi:</strong> Öneriniz moderatör tarafından incelenecektir. 
-                        Onaylanan her soru için <strong>+10 puan</strong> kazanacaksınız. 
-                        Günlük maksimum 20 soru önerebilirsiniz.
+    <div class="container sb-page">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card sb-dashboard-card sb-dashboard-card--brand">
+                    <div class="card-body d-flex align-items-start gap-3">
+                        <div class="rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 52px; height: 52px;">
+                            <i class="bi bi-lightbulb fs-3"></i>
+                        </div>
+                        <div>
+                            <div class="text-muted small">Kullanici katkisi</div>
+                            <h2 class="h4 fw-bold mb-2">Yeni soru onerisi gonder</h2>
+                            <p class="text-muted mb-0">Oneriniz moderasyon ekibi tarafindan incelenir. Onaylanan soru icin puan kazanirsiniz.</p>
+                        </div>
                     </div>
-
-                    @if ($errors->any())
-                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <h5>Lütfen hataları düzeltiniz:</h5>
-                            <ul class="mb-0">
-                                @foreach ($errors->all() as $error)
-                                    <li>{{ $error }}</li>
-                                @endforeach
-                            </ul>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    @endif
-
-                    <form action="{{ route('questions.store') }}" method="POST">
-                        @csrf
-
-                        {{-- Subject Selection --}}
-                        <div class="mb-4">
-                            <label for="subject_id" class="form-label">
-                                <strong>Ders Seçin</strong>
-                            </label>
-                            <select class="form-select @error('subject_id') is-invalid @enderror" 
-                                    id="subject_id" name="subject_id" required>
-                                <option value="">-- Ders Seçiniz --</option>
-                                @foreach ($subjects as $subject)
-                                    <option value="{{ $subject->id }}" 
-                                            {{ old('subject_id') == $subject->id ? 'selected' : '' }}>
-                                        {{ $subject->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('subject_id')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        {{-- Question Text --}}
-                        <div class="mb-4">
-                            <label for="question_text" class="form-label">
-                                <strong>Soru Metni</strong>
-                                <small class="text-muted">(20-4000 karakter)</small>
-                            </label>
-                            <textarea class="form-control @error('question_text') is-invalid @enderror" 
-                                      id="question_text" name="question_text" rows="4" 
-                                      placeholder="Soruyu yazınız..." required>{{ old('question_text') }}</textarea>
-                            @error('question_text')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                            <small class="text-muted d-block mt-1">
-                                <span id="char-count">0</span> / 4000 karakter
-                            </small>
-                        </div>
-
-                        {{-- Options --}}
-                        <div class="mb-4">
-                            <label class="form-label"><strong>Şıklar (A, B, C, D, E)</strong></label>
-
-                            @foreach (['A' => 'A', 'B' => 'B', 'C' => 'C', 'D' => 'D', 'E' => 'E'] as $key => $label)
-                                <div class="mb-2">
-                                    <label for="option_{{ strtolower($key) }}" class="form-label">
-                                        <strong>Şık {{ $label }}</strong>
-                                    </label>
-                                    <input type="text" 
-                                           class="form-control @error("option_" . strtolower($key)) is-invalid @enderror" 
-                                           id="option_{{ strtolower($key) }}" 
-                                           name="option_{{ strtolower($key) }}" 
-                                           placeholder="Şık {{ $label }}"
-                                           value="{{ old("option_" . strtolower($key)) }}"
-                                           maxlength="500" required>
-                                    @error("option_" . strtolower($key))
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
-                                </div>
-                            @endforeach
-                        </div>
-
-                        {{-- Correct Option --}}
-                        <div class="mb-4">
-                            <label for="correct_option" class="form-label">
-                                <strong>Doğru Cevap</strong>
-                            </label>
-                            <select class="form-select @error('correct_option') is-invalid @enderror" 
-                                    id="correct_option" name="correct_option" required>
-                                <option value="">-- Doğru Cevabı Seçiniz --</option>
-                                @foreach (['A', 'B', 'C', 'D', 'E'] as $option)
-                                    <option value="{{ $option }}" 
-                                            {{ old('correct_option') == $option ? 'selected' : '' }}>
-                                        {{ $option }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('correct_option')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-
-                        {{-- Explanation --}}
-                        <div class="mb-4">
-                            <label for="explanation_text" class="form-label">
-                                <strong>Açıklama</strong>
-                                <small class="text-muted">(20-2000 karakter)</small>
-                            </label>
-                            <textarea class="form-control @error('explanation_text') is-invalid @enderror" 
-                                      id="explanation_text" name="explanation_text" rows="4" 
-                                      placeholder="Sorunun cevabı ve açıklamasını yazınız..." 
-                                      required>{{ old('explanation_text') }}</textarea>
-                            @error('explanation_text')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                            <small class="text-muted d-block mt-1">
-                                <span id="explanation-count">0</span> / 2000 karakter
-                            </small>
-                        </div>
-
-                        {{-- Submit Buttons --}}
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                            <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary btn-lg">
-                                İptal
-                            </a>
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                Soru Gönder
-                            </button>
-                        </div>
-                    </form>
                 </div>
             </div>
 
-            {{-- Recent Submissions Info --}}
-            <div class="card mt-4">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Önerilerim</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted mb-0">
-                        Önerilerinizi görmek için <a href="{{ route('questions.submitted') }}">buraya tıklayınız</a>.
-                    </p>
+            <div class="col-lg-4">
+                <div class="card h-100 sb-dashboard-card sb-dashboard-card--gold">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Kurallar</div>
+                        <ul class="mb-0 ps-3 small">
+                            <li>Soru metni: 20-4000 karakter</li>
+                            <li>Aciklama: 20-2000 karakter</li>
+                            <li>Gunluk en fazla 20 onerim</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <div class="card mt-4 sb-dashboard-card sb-dashboard-card--neutral">
+            <div class="card-body">
+                @if ($errors->any())
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <h2 class="h6 mb-2">Lutfen hatalari duzeltin</h2>
+                        <ul class="mb-0 ps-3">
+                            @foreach ($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+                    </div>
+                @endif
+
+                <form action="{{ route('questions.store') }}" method="POST" class="row g-3">
+                    @csrf
+
+                    <div class="col-12">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="small text-muted">Donem:</span>
+                            <a href="{{ route('questions.create', ['term' => 1]) }}"
+                               class="btn btn-sm {{ (int) ($selectedTerm ?? 1) === 1 ? 'btn-primary' : 'btn-outline-primary' }}">
+                                1. Donem
+                            </a>
+                            <a href="{{ route('questions.create', ['term' => 2]) }}"
+                               class="btn btn-sm {{ (int) ($selectedTerm ?? 1) === 2 ? 'btn-primary' : 'btn-outline-primary' }}">
+                                2. Donem
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <label for="subject_id" class="form-label fw-semibold">Ders</label>
+                        <select class="form-select @error('subject_id') is-invalid @enderror" id="subject_id" name="subject_id" required>
+                            <option value="">Ders seciniz</option>
+                            @foreach ($subjects as $subject)
+                                <option value="{{ $subject->id }}" @selected(old('subject_id') == $subject->id)>
+                                    {{ $subject->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('subject_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="col-12">
+                        <label for="question_text" class="form-label fw-semibold">Soru metni <span class="text-muted small">(20-4000)</span></label>
+                        <textarea class="form-control @error('question_text') is-invalid @enderror" id="question_text" name="question_text" rows="4" maxlength="4000" required>{{ old('question_text') }}</textarea>
+                        @error('question_text')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <div class="text-muted small mt-1"><span id="char-count">0</span> / 4000</div>
+                    </div>
+
+                    @foreach (['a' => 'A', 'b' => 'B', 'c' => 'C', 'd' => 'D', 'e' => 'E'] as $key => $label)
+                        <div class="col-12">
+                            <label for="option_{{ $key }}" class="form-label fw-semibold">Sik {{ $label }}</label>
+                            <input type="text" class="form-control @error('option_'.$key) is-invalid @enderror" id="option_{{ $key }}" name="option_{{ $key }}" value="{{ old('option_'.$key) }}" maxlength="500" required>
+                            @error('option_'.$key)
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    @endforeach
+
+                    <div class="col-md-4">
+                        <label for="correct_option" class="form-label fw-semibold">Dogru cevap</label>
+                        <select class="form-select @error('correct_option') is-invalid @enderror" id="correct_option" name="correct_option" required>
+                            <option value="">Seciniz</option>
+                            @foreach (['A', 'B', 'C', 'D', 'E'] as $option)
+                                <option value="{{ $option }}" @selected(old('correct_option') === $option)>{{ $option }}</option>
+                            @endforeach
+                        </select>
+                        @error('correct_option')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="col-12">
+                        <label for="explanation_text" class="form-label fw-semibold">Aciklama <span class="text-muted small">(20-2000)</span></label>
+                        <textarea class="form-control @error('explanation_text') is-invalid @enderror" id="explanation_text" name="explanation_text" rows="4" maxlength="2000" required>{{ old('explanation_text') }}</textarea>
+                        @error('explanation_text')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <div class="text-muted small mt-1"><span id="explanation-count">0</span> / 2000</div>
+                    </div>
+
+                    <div class="col-12 d-flex flex-wrap gap-2 justify-content-end">
+                        <a href="{{ route('dashboard') }}" class="btn btn-outline-secondary">Iptal</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-send me-1"></i> Oneriyi Gonder
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4 sb-dashboard-card sb-dashboard-card--neutral">
+            <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                <div>
+                    <h2 class="h5 fw-bold mb-1">Onerilerim</h2>
+                    <p class="text-muted mb-0">Gonderdiginiz soru onerilerinin durumunu tek listede takip edin.</p>
+                </div>
+                <a href="{{ route('questions.submitted') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-list-check me-1"></i> Onerilerimi Ac
+                </a>
+            </div>
+        </div>
     </div>
-</div>
 
-<script>
-document.getElementById('question_text').addEventListener('input', function() {
-    document.getElementById('char-count').textContent = this.value.length;
-});
+    <script>
+    const questionText = document.getElementById('question_text');
+    const explanationText = document.getElementById('explanation_text');
+    const charCount = document.getElementById('char-count');
+    const explanationCount = document.getElementById('explanation-count');
 
-document.getElementById('explanation_text').addEventListener('input', function() {
-    document.getElementById('explanation-count').textContent = this.value.length;
-});
+    function syncCounts() {
+        charCount.textContent = questionText.value.length;
+        explanationCount.textContent = explanationText.value.length;
+    }
 
-// Set initial counts
-document.getElementById('char-count').textContent = 
-    document.getElementById('question_text').value.length;
-document.getElementById('explanation-count').textContent = 
-    document.getElementById('explanation_text').value.length;
-</script>
-@endsection
+    questionText.addEventListener('input', syncCounts);
+    explanationText.addEventListener('input', syncCounts);
+    syncCounts();
+    </script>
+</x-app-layout>

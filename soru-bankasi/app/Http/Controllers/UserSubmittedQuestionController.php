@@ -29,11 +29,24 @@ class UserSubmittedQuestionController extends Controller
     {
         abort_unless($this->settingsService->getBool('user_submissions_enabled', true), 403);
 
+        $user = Auth::user();
+        $termFromQuery = request()->query('term');
+        if ($termFromQuery !== null && in_array((string) $termFromQuery, ['1', '2'], true)) {
+            $selectedTerm = (int) $termFromQuery;
+        } else {
+            $selectedTerm = (int) ($user->preferred_subject_term ?? 1);
+            if (! in_array($selectedTerm, [1, 2], true)) {
+                $selectedTerm = 1;
+            }
+        }
+
         return view('questions.submit', [
             'subjects' => Subject::query()
                 ->where('is_active', true)
+                ->where('term', $selectedTerm)
                 ->orderBy('name')
                 ->get(),
+            'selectedTerm' => $selectedTerm,
         ]);
     }
 

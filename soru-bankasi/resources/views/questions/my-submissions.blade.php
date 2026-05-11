@@ -103,24 +103,24 @@
                                 [$statusLabel, $statusClass, $cardClass, $statusIcon] = $statusMeta[$submission->status] ?? ['Bilinmiyor', 'secondary', 'sb-dashboard-card--neutral', 'bi-question-circle'];
                             @endphp
 
-                            <div class="card sb-dashboard-card {{ $cardClass }}">
+                            <div class="card sb-dashboard-card sb-submission-item {{ $cardClass }}">
                                 <div class="card-body">
-                                    <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3">
-                                        <div class="d-flex align-items-start gap-3">
+                                    <div class="d-flex flex-column flex-lg-row align-items-lg-start justify-content-between gap-3 sb-submission-item__row">
+                                        <div class="d-flex align-items-start gap-3 sb-submission-item__main">
                                             <div class="rounded bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 46px; height: 46px;">
                                                 <i class="bi {{ $statusIcon }} fs-4"></i>
                                             </div>
-                                            <div>
-                                                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                            <div class="sb-submission-item__content">
+                                                <div class="d-flex flex-wrap align-items-center gap-2 mb-2 sb-submission-item__badges">
                                                     <span class="badge text-bg-secondary">{{ $submission->subject?->name ?? '-' }}</span>
                                                     <span class="badge text-bg-{{ $statusClass }}">{{ $statusLabel }}</span>
                                                     <span class="text-muted small">{{ $submission->created_at->format('d.m.Y H:i') }}</span>
                                                 </div>
-                                                <div class="fw-bold mb-2">{{ \Illuminate\Support\Str::limit($submission->payload_json['question_text'] ?? '-', 120) }}</div>
+                                                <div class="fw-bold mb-2 sb-submission-item__question">{{ \Illuminate\Support\Str::limit($submission->payload_json['question_text'] ?? '-', 120) }}</div>
                                                 @if($submission->review_note)
-                                                    <div class="text-muted small">Moderator notu: {{ \Illuminate\Support\Str::limit($submission->review_note, 120) }}</div>
+                                                    <div class="text-muted small sb-submission-item__note">Moderator notu: {{ \Illuminate\Support\Str::limit($submission->review_note, 120) }}</div>
                                                 @else
-                                                    <div class="text-muted small">Detaylarda siklari, aciklamayi ve inceleme durumunu gorebilirsiniz.</div>
+                                                    <div class="text-muted small sb-submission-item__note">Detaylarda siklari, aciklamayi ve inceleme durumunu gorebilirsiniz.</div>
                                                 @endif
                                             </div>
                                         </div>
@@ -154,7 +154,7 @@
                                                 <div class="text-muted small text-uppercase fw-semibold mb-2">Siklar</div>
                                                 <div class="vstack gap-2">
                                                     @foreach(['A', 'B', 'C', 'D', 'E'] as $option)
-                                                        <div class="border rounded p-3 d-flex justify-content-between gap-3">
+                                                        <div class="border rounded p-3 d-flex justify-content-between gap-3 flex-wrap">
                                                             <div><strong>{{ $option }}.</strong> {{ $submission->payload_json['options'][$option] ?? '-' }}</div>
                                                             @if(($submission->payload_json['correct_option'] ?? null) === $option)
                                                                 <span class="badge text-bg-success align-self-start">Dogru cevap</span>

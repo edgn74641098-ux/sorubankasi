@@ -2730,3 +2730,46 @@ video {
     min-height: 1.45rem;
     min-width: 1.45rem;
 }
+
+/* My reports mobile fit */
+.sb-report-item__main,
+.sb-report-item__content,
+.sb-submission-item__main,
+.sb-submission-item__content {
+    min-width: 0;
+}
+
+.sb-report-item__badges .badge,
+.sb-report-item__badges .small,
+.sb-report-item__question,
+.sb-report-item__note,
+.sb-submission-item__badges .badge,
+.sb-submission-item__badges .small,
+.sb-submission-item__question,
+.sb-submission-item__note {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+@media (max-width: 767.98px) {
+    .sb-report-item__row,
+    .sb-submission-item__row {
+        gap: .75rem;
+    }
+
+    .sb-report-item__main,
+    .sb-submission-item__main {
+        width: 100%;
+    }
+
+    .sb-report-item__badges .badge,
+    .sb-submission-item__badges .badge {
+        max-width: 100%;
+        white-space: normal;
+    }
+
+    .sb-report-item .btn,
+    .sb-submission-item .btn {
+        width: 100%;
+    }
+}
