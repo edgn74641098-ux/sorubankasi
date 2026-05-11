@@ -169,3 +169,56 @@ Beklenen:
 - fail2ban `active (running)`
 - UFW `active`
 - `curl` cevabi `301` (https yonlendirme) veya dogrudan `200`
+
+## 8) Nginx rate-limit ve pattern block (WAF-lite)
+
+### `nginx.conf` (http blogu)
+
+`/etc/nginx/nginx.conf` icindeki `http { ... }` bloguna:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=global_limit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
+client_max_body_size 10m;
+```
+
+### Site config
+
+`/etc/nginx/sites-available/sorubankasi` icinde:
+
+```nginx
+# Suspicious request patterns
+if ($request_uri ~* "(\.\./|/phpmyadmin|/wp-admin|/cgi-bin|/\.env|/vendor/|/storage/|union.*select|information_schema|sleep\(|benchmark\()") {
+    return 444;
+}
+
+location / {
+    limit_req zone=global_limit burst=30 nodelay;
+    try_files $uri $uri/ /index.php?$query_string;
+}
+
+location = /login {
+    limit_req zone=login_limit burst=10 nodelay;
+    try_files $uri $uri/ /index.php?$query_string;
+}
+
+location = /register {
+    limit_req zone=login_limit burst=10 nodelay;
+    try_files $uri $uri/ /index.php?$query_string;
+}
+```
+
+### Uygulama
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Kontrol
+
+```bash
+sudo grep -n "limit_req_zone\|client_max_body_size" /etc/nginx/nginx.conf
+sudo sed -n '1,260p' /etc/nginx/sites-available/sorubankasi
+curl -I https://sorubankasi.duckdns.org
+```
