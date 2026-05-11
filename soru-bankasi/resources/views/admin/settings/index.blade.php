@@ -77,8 +77,16 @@
                                             id="{{ $key }}"
                                             class="form-control"
                                             value="{{ $value }}"
-                                            {{ in_array($key, ['mail_host', 'mail_from_address', 'mail_from_name'], true) ? 'required' : '' }}
                                         >
+                                        @if($key === 'mail_password')
+                                            <div class="form-check mt-2">
+                                                <input class="form-check-input" type="checkbox" value="1" id="mail_password_clear" name="mail_password_clear">
+                                                <label class="form-check-label" for="mail_password_clear">
+                                                    SMTP sifresini temizle
+                                                </label>
+                                            </div>
+                                            <div class="form-text">Bos birakirsan mevcut sifre korunur.</div>
+                                        @endif
                                     @else
                                         <input type="number" name="{{ $key }}" id="{{ $key }}" class="form-control" value="{{ $value }}" required>
                                     @endif

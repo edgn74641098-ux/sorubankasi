@@ -40,16 +40,29 @@ class SettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
-        $this->ensureSettingsExist($this->definitions());
+        $definitions = $this->definitions();
+        $this->ensureSettingsExist($definitions);
 
         $validated = $request->validate($this->rules());
 
         $oldValues = [];
         $newValues = [];
 
-        foreach ($this->definitions() as $key => $definition) {
+        foreach ($definitions as $key => $definition) {
             $old = $this->settings->get($key, $definition['default']);
             $new = $this->castValue($validated[$key], $definition['type']);
+
+            // Keep existing password unless admin explicitly clears it or sets a new one.
+            if ($key === 'mail_password') {
+                $clearPassword = filter_var($request->input('mail_password_clear', false), FILTER_VALIDATE_BOOL);
+                $newPassword = (string) $request->input('mail_password', '');
+
+                if ($clearPassword) {
+                    $new = '';
+                } elseif ($newPassword === '') {
+                    $new = (string) $old;
+                }
+            }
 
             if ($old === $new) {
                 continue;
@@ -85,6 +98,7 @@ class SettingsController extends Controller
     private function rules(): array
     {
         return [
+            'current_password' => ['required', 'current_password'],
             'test_feedback_mode' => ['required', Rule::in(['DELAYED_FEEDBACK', 'INSTANT_FEEDBACK_LOCKED', 'NO_FEEDBACK'])],
             'registration_open' => ['required', 'boolean'],
             'inactive_login_message' => ['required', 'string', 'min:10', 'max:500'],
@@ -117,6 +131,7 @@ class SettingsController extends Controller
             'mail_encryption' => ['nullable', Rule::in(['', 'tls', 'ssl'])],
             'mail_username' => ['nullable', 'string', 'max:255'],
             'mail_password' => ['nullable', 'string', 'max:255'],
+            'mail_password_clear' => ['nullable', 'boolean'],
             'mail_from_address' => ['required', 'email', 'max:255'],
             'mail_from_name' => ['required', 'string', 'max:255'],
         ];

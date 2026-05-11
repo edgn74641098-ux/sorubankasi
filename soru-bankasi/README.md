@@ -14,6 +14,7 @@ Proje hem local gelistirme hem de cPanel/shared hosting senaryolari icin duzenle
 7. [API Uclari](#api-uclari)
 8. [Tema ve UI Standardi](#tema-ve-ui-standardi)
 9. [Sorun Giderme](#sorun-giderme)
+10. [Deploy Security Runbook](#deploy-security-runbook)
 
 ## Temel Ozellikler
 
@@ -93,6 +94,12 @@ LOG_CHANNEL=single
 ```text
 /health
 ```
+
+## Deploy Security Runbook
+
+Canli ortam guvenlik ve servis kaliciligi adimlari icin:
+
+- [DEPLOY_SECURITY.md](DEPLOY_SECURITY.md)
 
 ## Roller ve Yetkiler
 
