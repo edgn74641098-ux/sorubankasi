@@ -43,6 +43,17 @@
                                             <option value="1" @selected($booleanValue === true)>Acik</option>
                                             <option value="0" @selected($booleanValue === false)>Kapali</option>
                                         </select>
+                                    @elseif($key === 'mail_mailer')
+                                        <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>
+                                            <option value="log" @selected($value === 'log')>Log (test ve guvenli mod)</option>
+                                            <option value="smtp" @selected($value === 'smtp')>SMTP</option>
+                                        </select>
+                                    @elseif($key === 'mail_encryption')
+                                        <select name="{{ $key }}" id="{{ $key }}" class="form-select">
+                                            <option value="" @selected($value === '')>Yok</option>
+                                            <option value="tls" @selected($value === 'tls')>TLS</option>
+                                            <option value="ssl" @selected($value === 'ssl')>SSL</option>
+                                        </select>
                                     @elseif($key === 'test_feedback_mode')
                                         <select name="{{ $key }}" id="{{ $key }}" class="form-select" required>
                                             @foreach(['DELAYED_FEEDBACK' => 'Test sonunda goster', 'INSTANT_FEEDBACK_LOCKED' => 'Aninda goster ve kilitle', 'NO_FEEDBACK' => 'Feedback kapali'] as $optionValue => $label)
@@ -59,6 +70,15 @@
                                         @if($key === 'question_report_accept_message')
                                             <div class="form-text">Kullanilabilir alanlar: {old_answer}, {new_answer}, {question_id}</div>
                                         @endif
+                                    @elseif($setting['type'] === 'string')
+                                        <input
+                                            type="{{ in_array($key, ['mail_password'], true) ? 'password' : 'text' }}"
+                                            name="{{ $key }}"
+                                            id="{{ $key }}"
+                                            class="form-control"
+                                            value="{{ $value }}"
+                                            {{ in_array($key, ['mail_host', 'mail_from_address', 'mail_from_name'], true) ? 'required' : '' }}
+                                        >
                                     @else
                                         <input type="number" name="{{ $key }}" id="{{ $key }}" class="form-control" value="{{ $value }}" required>
                                     @endif

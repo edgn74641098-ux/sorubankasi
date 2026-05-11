@@ -51,6 +51,14 @@ class AdminManagementTest extends TestCase
             'archive_auto_prune_enabled' => '1',
             'maintenance_mode' => '0',
             'backup_mode' => 'manual',
+            'mail_mailer' => 'log',
+            'mail_host' => 'smtp.mailgun.org',
+            'mail_port' => '587',
+            'mail_encryption' => 'tls',
+            'mail_username' => '',
+            'mail_password' => '',
+            'mail_from_address' => 'hello@example.com',
+            'mail_from_name' => 'Soru Bankasi',
             'current_password' => 'password',
         ])->assertRedirect(route('admin.settings.index'));
 
@@ -126,6 +134,14 @@ class AdminManagementTest extends TestCase
             'archive_auto_prune_enabled' => '0',
             'maintenance_mode' => '0',
             'backup_mode' => 'automatic',
+            'mail_mailer' => 'log',
+            'mail_host' => 'smtp.mailgun.org',
+            'mail_port' => '587',
+            'mail_encryption' => 'tls',
+            'mail_username' => '',
+            'mail_password' => '',
+            'mail_from_address' => 'hello@example.com',
+            'mail_from_name' => 'Soru Bankasi',
             'current_password' => 'password',
         ])->assertRedirect(route('admin.settings.index'));
 

@@ -8,6 +8,7 @@ use App\Services\AuditLogService;
 use App\Services\SettingsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -70,6 +71,10 @@ class SettingsController extends Controller
                 'Admin ayarlari guncellendi.',
                 $request
             );
+
+            if ($this->hasMailSettingChanges($newValues)) {
+                Artisan::call('queue:restart');
+            }
         }
 
         return redirect()
@@ -106,6 +111,14 @@ class SettingsController extends Controller
             'archive_auto_prune_enabled' => ['required', 'boolean'],
             'maintenance_mode' => ['required', 'boolean'],
             'backup_mode' => ['required', Rule::in(['manual', 'automatic'])],
+            'mail_mailer' => ['required', Rule::in(['smtp', 'log'])],
+            'mail_host' => ['required_if:mail_mailer,smtp', 'nullable', 'string', 'max:255'],
+            'mail_port' => ['required_if:mail_mailer,smtp', 'nullable', 'integer', 'between:1,65535'],
+            'mail_encryption' => ['nullable', Rule::in(['', 'tls', 'ssl'])],
+            'mail_username' => ['nullable', 'string', 'max:255'],
+            'mail_password' => ['nullable', 'string', 'max:255'],
+            'mail_from_address' => ['required', 'email', 'max:255'],
+            'mail_from_name' => ['required', 'string', 'max:255'],
         ];
     }
 
@@ -144,6 +157,15 @@ class SettingsController extends Controller
 
             'maintenance_mode' => ['group' => 'system', 'label' => 'Bakim modu', 'type' => 'boolean', 'default' => false],
             'backup_mode' => ['group' => 'system', 'label' => 'Yedekleme modu', 'type' => 'string', 'default' => 'manual'],
+
+            'mail_mailer' => ['group' => 'mail', 'label' => 'Mail gonderim yontemi', 'type' => 'string', 'default' => 'log'],
+            'mail_host' => ['group' => 'mail', 'label' => 'SMTP host', 'type' => 'string', 'default' => 'smtp.mailgun.org'],
+            'mail_port' => ['group' => 'mail', 'label' => 'SMTP port', 'type' => 'integer', 'default' => 587],
+            'mail_encryption' => ['group' => 'mail', 'label' => 'SMTP sifreleme', 'type' => 'string', 'default' => 'tls'],
+            'mail_username' => ['group' => 'mail', 'label' => 'SMTP kullanici adi', 'type' => 'string', 'default' => ''],
+            'mail_password' => ['group' => 'mail', 'label' => 'SMTP sifre', 'type' => 'string', 'default' => ''],
+            'mail_from_address' => ['group' => 'mail', 'label' => 'Gonderen e-posta adresi', 'type' => 'string', 'default' => 'hello@example.com'],
+            'mail_from_name' => ['group' => 'mail', 'label' => 'Gonderen adi', 'type' => 'string', 'default' => 'Soru Bankasi'],
         ];
     }
 
@@ -157,6 +179,7 @@ class SettingsController extends Controller
             'submissions' => 'Oneriler',
             'archive' => 'Arsiv ve Silme',
             'system' => 'Sistem',
+            'mail' => 'Mail Gonderim',
         ];
     }
 
@@ -179,5 +202,16 @@ class SettingsController extends Controller
             'integer' => (int) $value,
             default => (string) $value,
         };
+    }
+
+    private function hasMailSettingChanges(array $newValues): bool
+    {
+        foreach (array_keys($newValues) as $key) {
+            if (str_starts_with($key, 'mail_')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
