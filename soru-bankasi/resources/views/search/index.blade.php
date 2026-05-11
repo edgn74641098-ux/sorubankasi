@@ -42,10 +42,29 @@
                                         <i class="bi bi-search me-1"></i> Ara
                                     </button>
                                 </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input
+                                            class="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
+                                            id="stuck_only"
+                                            name="stuck_only"
+                                            value="1"
+                                            @checked($stuckOnly ?? false)
+                                        >
+                                        <label class="form-check-label fw-semibold" for="stuck_only">
+                                            Takildigim sorular
+                                        </label>
+                                        <div class="text-muted small mt-1">
+                                            Acikken sadece secili derste takildigin sorular listelenir.
+                                        </div>
+                                    </div>
+                                </div>
                                 @if($showQuestions)
                                     <div class="col-md-12">
                                         <a
-                                            href="{{ route('search.pdf', ['q' => $term !== '' ? $term : null, 'subject_id' => $selectedSubjectId]) }}"
+                                            href="{{ route('search.pdf', ['q' => $term !== '' ? $term : null, 'subject_id' => $selectedSubjectId, 'stuck_only' => ($stuckOnly ?? false) ? 1 : null]) }}"
                                             class="btn btn-outline-secondary btn-sm"
                                         >
                                             <i class="bi bi-file-earmark-pdf me-1"></i> PDF Indir
@@ -67,6 +86,8 @@
                             <div class="text-muted small">
                                 @if(!$showQuestions)
                                     Arama bekleniyor.
+                                @elseif(($stuckOnly ?? false) && $selectedSubjectId)
+                                    Secili dersteki takildigin sorular listeleniyor.
                                 @elseif($term === '' && $selectedSubjectId)
                                     Secili dersteki tum aktif sorular listeleniyor.
                                 @elseif($selectedSubjectId)
@@ -127,8 +148,13 @@
                                     @if($term !== '')
                                         "{{ $term }}" kelimesinin gectigi aktif sorular
                                         @if($selectedSubjectId)
-                                            · ders filtresi uygulaniyor
+                                            - ders filtresi uygulaniyor
                                         @endif
+                                        @if($stuckOnly ?? false)
+                                            - sadece takildigin sorular
+                                        @endif
+                                    @elseif($stuckOnly ?? false)
+                                        Secili derste sadece takildigin sorular
                                     @else
                                         Secili dersteki tum aktif sorular
                                     @endif
@@ -185,6 +211,8 @@
                                     <div class="text-muted">
                                         @if($term !== '')
                                             Bu kelimenin gectigi aktif soru bulunamadi.
+                                        @elseif($stuckOnly ?? false)
+                                            Secili derste takildigin soru bulunamadi.
                                         @else
                                             Secili derste aktif soru bulunamadi.
                                         @endif
