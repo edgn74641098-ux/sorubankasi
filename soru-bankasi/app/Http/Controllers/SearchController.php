@@ -16,13 +16,13 @@ class SearchController extends Controller
 {
     public function __invoke(Request $request): View
     {
-        [$term, $selectedSubjectId, $stuckOnly] = $this->validatedFilters($request);
+        [$term, $selectedSubjectId, $stuckOnly, $useDifficulty, $minDifficulty, $maxDifficulty] = $this->validatedFilters($request);
         $subjects = Subject::query()
             ->where('is_active', true)
             ->orderBy('name')
             ->get(['id', 'name']);
         $subjectResults = collect();
-        $questionQuery = $this->questionQuery($request, $term, $selectedSubjectId, $stuckOnly);
+        $questionQuery = $this->questionQuery($request, $term, $selectedSubjectId, $stuckOnly, $useDifficulty, $minDifficulty, $maxDifficulty);
 
         if ($term !== '') {
             $subjectResults = Subject::query()
@@ -49,7 +49,7 @@ class SearchController extends Controller
                         ->orWhere('explanation_text', 'like', "%{$term}%");
                 });
         }
-        $showQuestions = $term !== '' || $selectedSubjectId !== null || $stuckOnly;
+        $showQuestions = $term !== '' || $selectedSubjectId !== null || $stuckOnly || $useDifficulty;
         $questionResults = $showQuestions
             ? $questionQuery->paginate(50)->withQueryString()->fragment('question-results')
             : new LengthAwarePaginator([], 0, 50);
@@ -59,6 +59,9 @@ class SearchController extends Controller
             'subjects' => $subjects,
             'selectedSubjectId' => $selectedSubjectId,
             'stuckOnly' => $stuckOnly,
+            'useDifficulty' => $useDifficulty,
+            'minDifficulty' => $minDifficulty,
+            'maxDifficulty' => $maxDifficulty,
             'subjectResults' => $subjectResults,
             'questionResults' => $questionResults,
             'showQuestions' => $showQuestions,
@@ -67,12 +70,12 @@ class SearchController extends Controller
 
     public function exportPdf(Request $request): Response
     {
-        [$term, $selectedSubjectId, $stuckOnly] = $this->validatedFilters($request);
-        $showQuestions = $term !== '' || $selectedSubjectId !== null || $stuckOnly;
+        [$term, $selectedSubjectId, $stuckOnly, $useDifficulty, $minDifficulty, $maxDifficulty] = $this->validatedFilters($request);
+        $showQuestions = $term !== '' || $selectedSubjectId !== null || $stuckOnly || $useDifficulty;
 
         abort_unless($showQuestions, 422, 'PDF indirmek icin en az bir ders secin veya arama yapin.');
 
-        $questions = $this->questionQuery($request, $term, $selectedSubjectId, $stuckOnly)
+        $questions = $this->questionQuery($request, $term, $selectedSubjectId, $stuckOnly, $useDifficulty, $minDifficulty, $maxDifficulty)
             ->limit(500)
             ->get();
 
@@ -84,6 +87,9 @@ class SearchController extends Controller
             'term' => $term,
             'selectedSubject' => $selectedSubject,
             'stuckOnly' => $stuckOnly,
+            'useDifficulty' => $useDifficulty,
+            'minDifficulty' => $minDifficulty,
+            'maxDifficulty' => $maxDifficulty,
             'questions' => $questions,
             'generatedAt' => now(),
         ])->setPaper('a4', 'portrait');
@@ -104,24 +110,46 @@ class SearchController extends Controller
                 Rule::requiredIf(fn () => $request->boolean('stuck_only')),
             ],
             'stuck_only' => ['nullable', 'boolean'],
+            'use_difficulty' => ['nullable', 'boolean'],
+            'min_difficulty' => ['nullable', 'numeric', 'between:1,10'],
+            'max_difficulty' => ['nullable', 'numeric', 'between:1,10'],
         ]);
 
         $stuckOnly = (bool) ($validated['stuck_only'] ?? false);
+        $useDifficulty = (bool) ($validated['use_difficulty'] ?? false);
+        $minDifficulty = (float) ($validated['min_difficulty'] ?? 3);
+        $maxDifficulty = (float) ($validated['max_difficulty'] ?? 8);
+
+        if ($maxDifficulty < $minDifficulty) {
+            [$minDifficulty, $maxDifficulty] = [$maxDifficulty, $minDifficulty];
+        }
 
         return [
             trim((string) ($validated['q'] ?? '')),
             $validated['subject_id'] ?? null,
             $stuckOnly,
+            $useDifficulty,
+            $minDifficulty,
+            $maxDifficulty,
         ];
     }
 
-    private function questionQuery(Request $request, string $term, ?int $selectedSubjectId, bool $stuckOnly)
+    private function questionQuery(
+        Request $request,
+        string $term,
+        ?int $selectedSubjectId,
+        bool $stuckOnly,
+        bool $useDifficulty,
+        float $minDifficulty,
+        float $maxDifficulty
+    )
     {
         $query = Question::query()
             ->with('subject:id,name,slug')
             ->where('status', 'active')
             ->whereHas('subject', fn ($query) => $query->where('is_active', true))
             ->when($selectedSubjectId, fn ($query) => $query->where('subject_id', $selectedSubjectId))
+            ->when($useDifficulty, fn ($query) => $query->whereBetween('difficulty_score', [$minDifficulty, $maxDifficulty]))
             ->when($term !== '', function ($query) use ($term): void {
                 $query->where(function ($query) use ($term): void {
                     $query->where('question_text', 'like', "%{$term}%")
