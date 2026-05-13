@@ -1,4 +1,8 @@
 <x-app-layout>
+    @push('scripts')
+        <script src="{{ asset('js/leaderboard-index.js') }}" defer></script>
+    @endpush
+
     <x-slot name="header">
         <h1 class="sb-page-title">Leaderboard</h1>
     </x-slot>
@@ -173,7 +177,7 @@
             </div>
         </div>
 
-        <div class="card sb-dashboard-card sb-dashboard-card--brand">
+        <div class="card sb-dashboard-card sb-dashboard-card--brand" id="subjectLeaderboardCard">
             <div class="card-header bg-white d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
                 <div>
                     <h2 class="h5 fw-bold mb-0"><i class="bi bi-mortarboard me-2 text-primary"></i>Ders Bazli Siralama</h2>
@@ -185,9 +189,9 @@
                         @endif
                     </div>
                 </div>
-                <form method="GET" action="{{ route('leaderboard.index') }}" class="d-flex align-items-center gap-2">
+                <form method="GET" action="{{ route('leaderboard.index') }}" class="d-flex align-items-center gap-2" id="subjectLeaderboardFilterForm">
                     <label for="subject_id" class="form-label small text-muted mb-0">Ders</label>
-                    <select id="subject_id" name="subject_id" class="form-select form-select-sm" data-autosubmit onchange="this.form.submit()">
+                    <select id="subject_id" name="subject_id" class="form-select form-select-sm" data-ajax-subject-filter>
                         @foreach($subjects as $subject)
                             <option value="{{ $subject->id }}" @selected($selectedSubjectId === $subject->id)>
                                 {{ $subject->name }}
