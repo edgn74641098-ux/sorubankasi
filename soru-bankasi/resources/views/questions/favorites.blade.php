@@ -85,7 +85,7 @@
                                                 </label>
                                                 <div class="d-flex gap-2">
                                                     @if($question)
-                                                        <form method="POST" action="{{ route('questions.favorites.destroy', $question) }}">
+                                                        <form method="POST" action="{{ route('questions.favorites.destroy', $question) }}" class="js-favorite-remove-form">
                                                             @csrf
                                                             @method('DELETE')
                                                             <button type="submit" class="btn btn-sm btn-outline-danger">Favoriden Cikar</button>

@@ -127,4 +127,86 @@
             scrollYInput.value = String(Math.max(0, Math.round(window.scrollY)));
         });
     }
+
+    function setFavoriteUi(form, favorited) {
+        var icon = form.querySelector(".js-test-favorite-icon");
+        var button = form.querySelector("button[type='submit']");
+        if (!icon || !button) {
+            return;
+        }
+
+        form.dataset.favorited = favorited ? "1" : "0";
+        icon.classList.toggle("bi-star-fill", favorited);
+        icon.classList.toggle("bi-star", !favorited);
+        button.setAttribute("title", favorited ? "Favoriden cikar" : "Favoriye ekle");
+        button.setAttribute("aria-label", favorited ? "Favoriden cikar" : "Favoriye ekle");
+    }
+
+    function syncFavoriteMethod(form, favorited) {
+        var methodInput = form.querySelector("input[name='_method']");
+        if (favorited) {
+            if (!methodInput) {
+                methodInput = document.createElement("input");
+                methodInput.type = "hidden";
+                methodInput.name = "_method";
+                form.appendChild(methodInput);
+            }
+            methodInput.value = "DELETE";
+            form.action = form.dataset.destroyUrl;
+        } else {
+            if (methodInput) {
+                methodInput.remove();
+            }
+            form.action = form.dataset.storeUrl;
+        }
+    }
+
+    document.addEventListener("submit", function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.classList.contains("js-test-favorite-form")) {
+            return;
+        }
+
+        event.preventDefault();
+
+        var tokenInput = form.querySelector("input[name='_token']");
+        if (!tokenInput) {
+            form.submit();
+            return;
+        }
+
+        var currentlyFavorited = form.dataset.favorited === "1";
+        var formData = new FormData(form);
+        var button = form.querySelector("button[type='submit']");
+        if (button) {
+            button.disabled = true;
+        }
+
+        fetch(form.action, {
+            method: "POST",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRF-TOKEN": tokenInput.value
+            },
+            body: formData,
+            credentials: "same-origin"
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error("test-favorite-toggle-failed");
+                }
+
+                var nextFavorited = !currentlyFavorited;
+                setFavoriteUi(form, nextFavorited);
+                syncFavoriteMethod(form, nextFavorited);
+            })
+            .catch(function () {
+                form.submit();
+            })
+            .finally(function () {
+                if (button) {
+                    button.disabled = false;
+                }
+            });
+    });
 })();

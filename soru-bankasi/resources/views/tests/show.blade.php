@@ -63,18 +63,32 @@
                             <h2 class="h5 fw-bold mb-0">{{ $item->question->question_text }}</h2>
                             <div class="d-flex flex-wrap gap-2">
                                 @if($isFavoriteQuestion ?? false)
-                                    <form method="POST" action="{{ route('questions.favorites.destroy', $item->question) }}">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('questions.favorites.destroy', $item->question) }}"
+                                        class="js-test-favorite-form"
+                                        data-store-url="{{ route('questions.favorites.store', $item->question) }}"
+                                        data-destroy-url="{{ route('questions.favorites.destroy', $item->question) }}"
+                                        data-favorited="1"
+                                    >
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm btn-outline-warning" title="Favoriden cikar">
-                                            <i class="bi bi-star-fill"></i>
+                                            <i class="bi bi-star-fill js-test-favorite-icon"></i>
                                         </button>
                                     </form>
                                 @else
-                                    <form method="POST" action="{{ route('questions.favorites.store', $item->question) }}">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('questions.favorites.store', $item->question) }}"
+                                        class="js-test-favorite-form"
+                                        data-store-url="{{ route('questions.favorites.store', $item->question) }}"
+                                        data-destroy-url="{{ route('questions.favorites.destroy', $item->question) }}"
+                                        data-favorited="0"
+                                    >
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-outline-warning" title="Favoriye ekle">
-                                            <i class="bi bi-star"></i>
+                                            <i class="bi bi-star js-test-favorite-icon"></i>
                                         </button>
                                     </form>
                                 @endif
@@ -108,22 +122,19 @@
                                 @endforeach
                             </div>
 
-                            <div class="d-flex flex-wrap justify-content-between gap-3 pt-4">
-                                <div class="d-flex flex-wrap gap-2">
-                                    <button type="submit" name="action" value="prev" class="btn btn-outline-secondary">Geri</button>
-                                    <button type="submit" name="action" value="stay" class="btn btn-outline-primary">Cevabi Kaydet</button>
-                                    <button type="submit" name="action" value="next" class="btn btn-primary">Ileri</button>
-                                </div>
-
-                                <button type="button" class="btn btn-danger" data-submit-form="finishTestForm">
-                                    Testi Bitir
-                                </button>
+                            <div class="d-flex flex-wrap gap-2 pt-4">
+                                <button type="submit" name="action" value="prev" class="btn btn-outline-secondary">Geri</button>
+                                <button type="submit" name="action" value="stay" class="btn btn-outline-primary">Cevabi Kaydet</button>
+                                <button type="submit" name="action" value="next" class="btn btn-primary">Ileri</button>
                             </div>
                         </form>
 
-                        <form id="finishTestForm" method="POST" action="{{ route('tests.finish', $test) }}" class="d-none">
-                            @csrf
-                        </form>
+                        <div class="d-flex justify-content-end pt-3">
+                            <form id="finishTestForm" method="POST" action="{{ route('tests.finish', $test) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-danger">Testi Bitir</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

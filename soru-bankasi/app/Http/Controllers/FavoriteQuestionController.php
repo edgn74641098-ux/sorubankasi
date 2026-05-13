@@ -9,6 +9,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class FavoriteQuestionController extends Controller
@@ -73,7 +74,7 @@ class FavoriteQuestionController extends Controller
             'question_id' => $question->id,
         ]);
 
-        return back()->with('success', 'Soru favorilere eklendi.');
+        return $this->redirectBack($request)->with('success', 'Soru favorilere eklendi.');
     }
 
     public function destroy(Question $question, Request $request): RedirectResponse
@@ -83,7 +84,7 @@ class FavoriteQuestionController extends Controller
             ->where('question_id', $question->id)
             ->delete();
 
-        return back()->with('success', 'Soru favorilerden cikarildi.');
+        return $this->redirectBack($request)->with('success', 'Soru favorilerden cikarildi.');
     }
 
     public function updateNote(UserFavoriteQuestion $favorite, Request $request): RedirectResponse
@@ -98,7 +99,30 @@ class FavoriteQuestionController extends Controller
             'note' => trim((string) ($validated['note'] ?? '')) !== '' ? $validated['note'] : null,
         ]);
 
-        return back()->with('success', 'Favori notu guncellendi.');
+        return $this->redirectBack($request)->with('success', 'Favori notu guncellendi.');
+    }
+
+    private function redirectBack(Request $request): RedirectResponse
+    {
+        $target = (string) $request->input('redirect_to', '');
+        $currentHost = (string) $request->getHost();
+
+        if ($target !== '') {
+            $targetHost = (string) parse_url($target, PHP_URL_HOST);
+            $isRelative = Str::startsWith($target, '/');
+            $isSameHost = $targetHost !== '' && strcasecmp($targetHost, $currentHost) === 0;
+
+            if ($isRelative || $isSameHost) {
+                return redirect()->to($target);
+            }
+        }
+
+        $previousUrl = url()->previous();
+        if (Str::contains($previousUrl, '/search') && ! Str::contains($previousUrl, '#question-results')) {
+            return redirect()->to($previousUrl.'#question-results');
+        }
+
+        return back();
     }
 
     public function exportPdf(Request $request): Response

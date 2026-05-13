@@ -255,28 +255,44 @@
                                                 <span class="badge text-bg-dark">#{{ $rowNumber }}</span>
                                                 <span class="badge text-bg-light text-dark border d-inline-flex align-items-center">
                                                     @if($isFavoriteQuestion)
-                                                        <form method="POST" action="{{ route('questions.favorites.destroy', $question) }}" class="d-inline">
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ route('questions.favorites.destroy', $question) }}"
+                                                            class="d-inline js-favorite-toggle-form"
+                                                            data-store-url="{{ route('questions.favorites.store', $question) }}"
+                                                            data-destroy-url="{{ route('questions.favorites.destroy', $question) }}"
+                                                            data-favorited="1"
+                                                        >
                                                             @csrf
                                                             @method('DELETE')
+                                                            <input type="hidden" name="redirect_to" value="{{ url()->full() }}#question-results">
                                                             <button
                                                                 type="submit"
                                                                 class="btn btn-link p-0 border-0 text-warning lh-1"
                                                                 title="Favorilerden cikar"
                                                                 aria-label="Favorilerden cikar"
                                                             >
-                                                                <i class="bi bi-star-fill"></i>
+                                                                <i class="bi bi-star-fill js-favorite-icon"></i>
                                                             </button>
                                                         </form>
                                                     @else
-                                                        <form method="POST" action="{{ route('questions.favorites.store', $question) }}" class="d-inline">
+                                                        <form
+                                                            method="POST"
+                                                            action="{{ route('questions.favorites.store', $question) }}"
+                                                            class="d-inline js-favorite-toggle-form"
+                                                            data-store-url="{{ route('questions.favorites.store', $question) }}"
+                                                            data-destroy-url="{{ route('questions.favorites.destroy', $question) }}"
+                                                            data-favorited="0"
+                                                        >
                                                             @csrf
+                                                            <input type="hidden" name="redirect_to" value="{{ url()->full() }}#question-results">
                                                             <button
                                                                 type="submit"
                                                                 class="btn btn-link p-0 border-0 text-warning lh-1"
                                                                 title="Favorilere ekle"
                                                                 aria-label="Favorilere ekle"
                                                             >
-                                                                <i class="bi bi-star"></i>
+                                                                <i class="bi bi-star js-favorite-icon"></i>
                                                             </button>
                                                         </form>
                                                     @endif
