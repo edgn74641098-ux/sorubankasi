@@ -192,12 +192,6 @@ Standart karar:
 php artisan migrate
 ```
 
-Gerekirse local ortamda:
-
-```bash
-php artisan migrate:fresh --seed
-```
-
 ### Log temizleme
 
 ```bash
