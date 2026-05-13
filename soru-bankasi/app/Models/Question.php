@@ -92,4 +92,9 @@ class Question extends Model
     {
         return $this->hasMany(QuestionDifficultyRating::class);
     }
+
+    public function favoritedByUsers(): HasMany
+    {
+        return $this->hasMany(UserFavoriteQuestion::class);
+    }
 }

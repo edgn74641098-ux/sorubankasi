@@ -152,6 +152,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(LeaderboardSubjectSnapshot::class);
     }
 
+    public function favoriteQuestions(): HasMany
+    {
+        return $this->hasMany(UserFavoriteQuestion::class);
+    }
+
     public function isAdmin(): bool
     {
         return $this->role?->name === 'admin';

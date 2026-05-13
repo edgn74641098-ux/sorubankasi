@@ -49,6 +49,9 @@
                 <div class="alert alert-secondary py-2 small">
                     Taranan soru: <strong>{{ $scanMeta['scanned_questions'] ?? 0 }}</strong>,
                     karsilastirma: <strong>{{ $scanMeta['comparisons'] ?? 0 }}</strong>.
+                    @if(!empty($scanMeta['from_cache']))
+                        <span class="text-success fw-semibold">Sonuc cache'den getirildi.</span>
+                    @endif
                     @if(!empty($scanMeta['truncated']))
                         <span class="text-danger fw-semibold">Performans icin tarama sinirlandi (kismi sonuc).</span>
                     @endif
@@ -128,7 +131,7 @@
                                     </div>
                                 </div>
                                 <div class="col-12 d-flex justify-content-end">
-                                    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Secili soru disindakileri arsive tasimak istediginize emin misiniz?')">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Secili soru disindakileri arsive tasimak istediginize emin misiniz?">
                                         Secilmeyenleri Arsive Tasi
                                     </button>
                                 </div>

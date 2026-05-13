@@ -187,7 +187,7 @@
                 </div>
                 <form method="GET" action="{{ route('leaderboard.index') }}" class="d-flex align-items-center gap-2">
                     <label for="subject_id" class="form-label small text-muted mb-0">Ders</label>
-                    <select id="subject_id" name="subject_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <select id="subject_id" name="subject_id" class="form-select form-select-sm" data-autosubmit>
                         @foreach($subjects as $subject)
                             <option value="{{ $subject->id }}" @selected($selectedSubjectId === $subject->id)>
                                 {{ $subject->name }}

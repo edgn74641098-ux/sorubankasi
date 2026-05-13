@@ -127,7 +127,7 @@
                                         <div class="text-danger small mt-1">{{ $message }}</div>
                                     @enderror
 
-                                    <button type="submit" class="btn btn-danger btn-sm mt-3" onclick="return confirm('Bu soruyu gereksiz soru olarak raporlamak istediginize emin misiniz?');">
+                                    <button type="submit" class="btn btn-danger btn-sm mt-3" data-confirm="Bu soruyu gereksiz soru olarak raporlamak istediginize emin misiniz?">
                                         <i class="bi bi-send me-1"></i> Bildirimi Gonder
                                     </button>
                                 </form>

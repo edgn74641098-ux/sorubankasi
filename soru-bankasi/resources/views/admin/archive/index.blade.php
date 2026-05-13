@@ -27,7 +27,7 @@
                             <form id="bulk-subject-restore-form" method="POST" action="{{ route('admin.archive.subjects.restore-bulk') }}">
                                 @csrf
                             </form>
-                            <button type="submit" form="bulk-subject-restore-form" class="btn btn-sm btn-outline-success" onclick="return confirm('Secili dersleri geri almak istediginize emin misiniz? Bagli arsiv sorulari pasif duruma alinir.')">Secilenleri Geri Al</button>
+                            <button type="submit" form="bulk-subject-restore-form" class="btn btn-sm btn-outline-success" data-confirm="Secili dersleri geri almak istediginize emin misiniz? Bagli arsiv sorulari pasif duruma alinir.">Secilenleri Geri Al</button>
                         @endif
                         <span class="badge text-bg-secondary">{{ $subjects->total() }} kayit</span>
                     </div>
@@ -94,13 +94,13 @@
                                                 @can('delete', $subject)
                                                     <form method="POST" action="{{ route('admin.archive.subjects.restore', $subject) }}" class="d-inline">
                                                         @csrf
-                                                        <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Bu dersi ve arsivdeki bagli sorularini geri almak istediginize emin misiniz? Sorular pasif duruma alinir.')">Geri Al</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-success" data-confirm="Bu dersi ve arsivdeki bagli sorularini geri almak istediginize emin misiniz? Sorular pasif duruma alinir.">Geri Al</button>
                                                     </form>
                                                     @if(auth()->user()->isAdmin())
                                                         <form method="POST" action="{{ route('admin.archive.subjects.remove', $subject) }}" class="d-inline">
                                                             @csrf
                                                             @method('DELETE')
-                                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu dersi arsivden kaldirmak istediginize emin misiniz? Kayit panelden gizlenir, gecmis test ve log verileri korunur.')">Arsivden Kaldir</button>
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Bu dersi arsivden kaldirmak istediginize emin misiniz? Kayit panelden gizlenir, gecmis test ve log verileri korunur.">Arsivden Kaldir</button>
                                                         </form>
                                                     @endif
                                                 @else
@@ -134,7 +134,7 @@
                             <form id="bulk-question-restore-form" method="POST" action="{{ route('admin.archive.questions.restore-bulk') }}">
                                 @csrf
                             </form>
-                            <button type="submit" form="bulk-question-restore-form" class="btn btn-sm btn-outline-success" onclick="return confirm('Secili sorulari geri almak istediginize emin misiniz? Sorular pasif duruma alinir.')">Secilenleri Geri Al</button>
+                            <button type="submit" form="bulk-question-restore-form" class="btn btn-sm btn-outline-success" data-confirm="Secili sorulari geri almak istediginize emin misiniz? Sorular pasif duruma alinir.">Secilenleri Geri Al</button>
                         @endif
                         <span class="badge text-bg-secondary">{{ $questions->total() }} kayit</span>
                     </div>
@@ -229,13 +229,13 @@
                                                 @can('delete', $question)
                                                     <form method="POST" action="{{ route('admin.archive.questions.restore', $question) }}" class="d-inline">
                                                         @csrf
-                                                        <button type="submit" class="btn btn-sm btn-outline-success" onclick="return confirm('Bu soruyu geri almak istediginize emin misiniz? Soru pasif duruma alinir.')">Geri Al</button>
+                                                        <button type="submit" class="btn btn-sm btn-outline-success" data-confirm="Bu soruyu geri almak istediginize emin misiniz? Soru pasif duruma alinir.">Geri Al</button>
                                                     </form>
                                                     @if(auth()->user()->isAdmin())
                                                         <form method="POST" action="{{ route('admin.archive.questions.remove', $question) }}" class="d-inline">
                                                             @csrf
                                                             @method('DELETE')
-                                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu soruyu arsivden kaldirmak istediginize emin misiniz? Kayit panelden gizlenir, gecmis test ve log verileri korunur.')">Arsivden Kaldir</button>
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Bu soruyu arsivden kaldirmak istediginize emin misiniz? Kayit panelden gizlenir, gecmis test ve log verileri korunur.">Arsivden Kaldir</button>
                                                         </form>
                                                     @endif
                                                 @endcan

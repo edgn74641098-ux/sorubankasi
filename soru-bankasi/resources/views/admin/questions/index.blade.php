@@ -1,5 +1,9 @@
 @extends('layouts.admin', ['pageTitle' => 'Soru Yonetimi', 'title' => 'Soru Yonetimi'])
 
+@push('scripts')
+    <script src="{{ asset('js/admin-questions-index.js') }}" defer></script>
+@endpush
+
 @section('content')
     @php
         $sort = $filters['sort'] ?? 'created_at';
@@ -75,11 +79,11 @@
                     <div class="text-muted small">Secili sorulari tek seferde arsive tasiyabilirsiniz.</div>
                     <div class="d-flex flex-wrap gap-2 justify-content-end">
                         @if(auth()->user()->isAdmin())
-                            <button type="submit" form="bulkActivateForm" name="scope" value="selected" class="btn btn-outline-success btn-sm" onclick="return confirm('Secili pasif sorulari aktif hale getirmek istediginize emin misiniz?')">
+                            <button type="submit" form="bulkActivateForm" name="scope" value="selected" class="btn btn-outline-success btn-sm" data-confirm="Secili pasif sorulari aktif hale getirmek istediginize emin misiniz?">
                                 Secili Pasifleri Aktif Yap
                             </button>
                         @endif
-                        <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Secili sorulari arsive tasimak istediginize emin misiniz?')">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" data-confirm="Secili sorulari arsive tasimak istediginize emin misiniz?">
                             Secilileri Arsive Tasi
                         </button>
                     </div>
@@ -96,7 +100,7 @@
                             <div>
                                 Bu filtrede {{ $questions->total() }} pasif soru var. Pasif sorular kullanici ders havuzunda ve aramada aktif soru olarak gorunmez.
                             </div>
-                            <button type="submit" form="bulkActivateForm" name="scope" value="filter" class="btn btn-success btn-sm" onclick="return confirm('Bu filtredeki tum pasif sorulari aktif hale getirmek istediginize emin misiniz?')">
+                            <button type="submit" form="bulkActivateForm" name="scope" value="filter" class="btn btn-success btn-sm" data-confirm="Bu filtredeki tum pasif sorulari aktif hale getirmek istediginize emin misiniz?">
                                 Filtredeki Tum Pasifleri Aktif Yap
                             </button>
                         </div>
@@ -172,7 +176,7 @@
                                             <form method="POST" action="{{ route('admin.questions.destroy', $question) }}" class="d-inline">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu soruyu arsive tasimak istediginize emin misiniz?')">Arsive Tasi</button>
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Bu soruyu arsive tasimak istediginize emin misiniz?">Arsive Tasi</button>
                                             </form>
                                         @endcan
                                     </td>
@@ -186,24 +190,4 @@
             @endif
         </div>
     </div>
-    <script>
-        document.querySelector('.js-question-select-all')?.addEventListener('change', (event) => {
-            document.querySelectorAll('.js-question-select').forEach((checkbox) => {
-                checkbox.checked = event.target.checked;
-                const hidden = document.querySelector(`.js-question-activate-select[value="${checkbox.value}"]`);
-                if (hidden) {
-                    hidden.checked = checkbox.checked;
-                }
-            });
-        });
-
-        document.querySelectorAll('.js-question-select').forEach((checkbox) => {
-            checkbox.addEventListener('change', () => {
-                const hidden = document.querySelector(`.js-question-activate-select[value="${checkbox.value}"]`);
-                if (hidden) {
-                    hidden.checked = checkbox.checked;
-                }
-            });
-        });
-    </script>
 @endsection

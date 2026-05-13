@@ -40,7 +40,7 @@
                                     <form method="POST" action="{{ route('admin.questions.versions.rollback', [$question, $version]) }}" class="d-inline-flex gap-2">
                                         @csrf
                                         <input type="text" name="reason" class="form-control form-control-sm sb-width-220" placeholder="Gerekce" required>
-                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu surume geri almak istediginize emin misiniz?')">Geri Al</button>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Bu surume geri almak istediginize emin misiniz?">Geri Al</button>
                                     </form>
                                 </td>
                             </tr>

@@ -1,4 +1,8 @@
 <x-app-layout>
+    @push('scripts')
+        <script src="{{ asset('js/subjects-index.js') }}" defer></script>
+    @endpush
+
     <x-slot name="header">
         <h1 class="sb-page-title">Dersler</h1>
     </x-slot>
@@ -272,60 +276,4 @@
         @endif
     </div>
 
-    <script>
-        const minSlider = document.getElementById('min_difficulty');
-        const maxSlider = document.getElementById('max_difficulty');
-        const minOutput = document.getElementById('minDifficultyValue');
-        const maxOutput = document.getElementById('maxDifficultyValue');
-        const difficultyBlock = document.querySelector('.js-difficulty-range-block');
-        const modeInputs = document.querySelectorAll('input[name="mode"]');
-        const subjectSelect = document.getElementById('subject_id');
-        const weakQuestionModeCount = document.getElementById('weakQuestionModeCount');
-        const solvedUniqueCount = document.getElementById('solvedUniqueCount');
-        const remainingUniqueCount = document.getElementById('remainingUniqueCount');
-
-        const syncDifficultyVisibility = () => {
-            const selected = document.querySelector('input[name="mode"]:checked');
-            if (! difficultyBlock || ! selected) {
-                return;
-            }
-            difficultyBlock.classList.toggle('d-none', selected.value !== 'DIFFICULTY_RANGE');
-        };
-
-        modeInputs.forEach((input) => input.addEventListener('change', syncDifficultyVisibility));
-        syncDifficultyVisibility();
-
-        const syncWeakQuestionCount = () => {
-            if (! subjectSelect || ! weakQuestionModeCount) {
-                return;
-            }
-
-            const selectedOption = subjectSelect.options[subjectSelect.selectedIndex];
-            weakQuestionModeCount.textContent = selectedOption?.dataset.weakCount || '0';
-            if (solvedUniqueCount) {
-                solvedUniqueCount.textContent = selectedOption?.dataset.solvedUniqueCount || '0';
-            }
-            if (remainingUniqueCount) {
-                remainingUniqueCount.textContent = selectedOption?.dataset.remainingUniqueCount || '0';
-            }
-        };
-
-        subjectSelect?.addEventListener('change', syncWeakQuestionCount);
-        syncWeakQuestionCount();
-
-        if (minSlider && maxSlider) {
-            const syncValues = () => {
-                if (parseInt(minSlider.value, 10) > parseInt(maxSlider.value, 10)) {
-                    maxSlider.value = minSlider.value;
-                }
-
-                minOutput.textContent = minSlider.value;
-                maxOutput.textContent = maxSlider.value;
-            };
-
-            minSlider.addEventListener('input', syncValues);
-            maxSlider.addEventListener('input', syncValues);
-            syncValues();
-        }
-    </script>
 </x-app-layout>

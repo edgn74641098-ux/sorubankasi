@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ?? config('app.name', 'Soru Bankasi') }}</title>
     @vite(['resources/css/admin.css', 'resources/js/admin.js'])
+    @stack('head')
 </head>
 <body class="admin-body">
     @php
@@ -115,5 +116,6 @@
         hidden
         aria-label="Menüyü Kapat"
     ></button>
+    @stack('scripts')
 </body>
 </html>

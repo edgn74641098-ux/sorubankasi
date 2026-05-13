@@ -5,29 +5,19 @@
 
     @php($restoreScroll = max(0, (int) request()->integer('scroll', 0)))
     @push('head')
-        @if($restoreScroll > 0)
-            <style>
-                html.sb-test-restore-lock body { visibility: hidden; }
-            </style>
-            <script>
-                (() => {
-                    const targetY = {{ $restoreScroll }};
-                    if (!Number.isFinite(targetY) || targetY <= 0) return;
-                    document.documentElement.classList.add('sb-test-restore-lock');
-                    history.scrollRestoration = 'manual';
-                    window.scrollTo(0, targetY);
-                    const unlock = () => {
-                        window.scrollTo(0, targetY);
-                        document.documentElement.classList.remove('sb-test-restore-lock');
-                    };
-                    window.addEventListener('DOMContentLoaded', unlock, { once: true });
-                    window.addEventListener('load', unlock, { once: true });
-                })();
-            </script>
-        @endif
+        <link rel="stylesheet" href="{{ asset('css/tests-show.css') }}">
     @endpush
 
-    <div class="container sb-page">
+    @push('scripts')
+        <script src="{{ asset('js/tests-show.js') }}" defer></script>
+    @endpush
+
+    <div
+        class="container sb-page"
+        id="testsShowPage"
+        data-restore-scroll="{{ $restoreScroll }}"
+        data-remaining-seconds="{{ $remainingSeconds }}"
+    >
         <div class="row justify-content-center">
             <div class="col-lg-10">
                 @php($feedback = session('answer_feedback'))
@@ -71,12 +61,30 @@
                         <div class="text-muted small mb-3">Geri bildirim modu: {{ $test->feedback_mode }}</div>
                         <div class="d-flex align-items-start justify-content-between gap-3 mb-4">
                             <h2 class="h5 fw-bold mb-0">{{ $item->question->question_text }}</h2>
-                            <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reportModal" title="Bu soruya itiraz et">
-                                Itiraz
-                            </button>
+                            <div class="d-flex flex-wrap gap-2">
+                                @if($isFavoriteQuestion ?? false)
+                                    <form method="POST" action="{{ route('questions.favorites.destroy', $item->question) }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Favoriden cikar">
+                                            <i class="bi bi-star-fill"></i>
+                                        </button>
+                                    </form>
+                                @else
+                                    <form method="POST" action="{{ route('questions.favorites.store', $item->question) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-outline-warning" title="Favoriye ekle">
+                                            <i class="bi bi-star"></i>
+                                        </button>
+                                    </form>
+                                @endif
+                                <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reportModal" title="Bu soruya itiraz et">
+                                    Itiraz
+                                </button>
+                            </div>
                         </div>
 
-                        <form method="POST" action="{{ route('tests.answer', $test) }}">
+                        <form method="POST" action="{{ route('tests.answer', $test) }}" id="testAnswerForm">
                             @csrf
                             <input type="hidden" name="test_item_id" value="{{ $item->id }}">
                             <input type="hidden" name="current_index" value="{{ $currentIndex }}">
@@ -107,7 +115,7 @@
                                     <button type="submit" name="action" value="next" class="btn btn-primary">Ileri</button>
                                 </div>
 
-                                <button type="button" class="btn btn-danger" onclick="document.getElementById('finishTestForm').submit();">
+                                <button type="button" class="btn btn-danger" data-submit-form="finishTestForm">
                                     Testi Bitir
                                 </button>
                             </div>
@@ -207,90 +215,4 @@
         </div>
     </div>
 
-    <script>
-        const container = document.getElementById('questionContainer');
-        const fontSizeSelect = document.getElementById('fontSizeSelect');
-        const timer = document.getElementById('remainingTimer');
-        const storageKey = 'test-font-size';
-
-        const applyFontSize = (value) => {
-            container.classList.remove('fs-6', 'fs-5', 'fs-4');
-
-            if (value === 'large') {
-                container.classList.add('fs-5');
-            } else if (value === 'xlarge') {
-                container.classList.add('fs-4');
-            } else {
-                container.classList.add('fs-6');
-            }
-        };
-
-        const saved = localStorage.getItem(storageKey) || 'base';
-        fontSizeSelect.value = saved;
-        applyFontSize(saved);
-
-        fontSizeSelect.addEventListener('change', () => {
-            localStorage.setItem(storageKey, fontSizeSelect.value);
-            applyFontSize(fontSizeSelect.value);
-        });
-
-        let remainingSeconds = {{ $remainingSeconds }};
-        const renderTimer = () => {
-            const minutes = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
-            const seconds = String(remainingSeconds % 60).padStart(2, '0');
-            timer.textContent = `${minutes}:${seconds}`;
-        };
-
-        renderTimer();
-
-        const interval = setInterval(() => {
-            if (remainingSeconds <= 0) {
-                clearInterval(interval);
-                window.location.reload();
-                return;
-            }
-
-            remainingSeconds -= 1;
-            renderTimer();
-        }, 1000);
-
-        const noteTextarea = document.getElementById('reportNote');
-        const charCount = document.getElementById('charCount');
-        const scrollYInput = document.getElementById('scrollYInput');
-        const answerForm = document.querySelector('form[action="{{ route('tests.answer', $test) }}"]');
-        const reportCategory = document.getElementById('reportCategory');
-        const reportCorrectOptionWrap = document.getElementById('reportCorrectOptionWrap');
-        const reportCorrectOption = document.getElementById('suggestedCorrectOption');
-        const reportSubjectWrap = document.getElementById('reportSubjectWrap');
-        const reportSubject = document.getElementById('suggestedSubject');
-        const reportTypoWrap = document.getElementById('reportTypoWrap');
-        const reportTypoFields = document.querySelectorAll('.report-typo-field');
-
-        noteTextarea.addEventListener('input', () => {
-            charCount.textContent = noteTextarea.value.length;
-        });
-
-        const syncReportFields = () => {
-            const wrongSubject = reportCategory.value === 'WRONG_SUBJECT';
-            const typoCategory = reportCategory.value === 'TYPO';
-            reportCorrectOptionWrap.classList.toggle('d-none', wrongSubject);
-            reportCorrectOption.required = !wrongSubject;
-            reportSubjectWrap.classList.toggle('d-none', !wrongSubject);
-            reportSubject.required = wrongSubject;
-            reportTypoWrap.classList.toggle('d-none', !typoCategory);
-            reportTypoFields.forEach((field) => {
-                field.required = typoCategory;
-            });
-        };
-
-        reportCategory.addEventListener('change', syncReportFields);
-        syncReportFields();
-
-        if (answerForm && scrollYInput) {
-            answerForm.addEventListener('submit', () => {
-                scrollYInput.value = String(Math.max(0, Math.round(window.scrollY)));
-            });
-        }
-
-    </script>
 </x-app-layout>

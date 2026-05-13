@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Models\Question;
 use App\Models\Subject;
+use App\Models\UserFavoriteQuestion;
 use App\Models\UserWrongQuestionStat;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
@@ -65,6 +66,11 @@ class SearchController extends Controller
             'subjectResults' => $subjectResults,
             'questionResults' => $questionResults,
             'showQuestions' => $showQuestions,
+            'favoriteQuestionIds' => UserFavoriteQuestion::query()
+                ->where('user_id', $request->user()->id)
+                ->pluck('question_id')
+                ->map(fn ($id) => (int) $id)
+                ->all(),
         ]);
     }
 

@@ -241,7 +241,7 @@
                             </form>
 
                             @if(! $user->isAdmin())
-                                <form method="POST" action="{{ route('admin.users.destroy', $user) }}" onsubmit="return confirm('Bu kullaniciyi silmek istediginize emin misiniz? Kullanici hesabi pasif olarak listeden kaldirilir, gecmis kayitlar korunur.');">
+                                <form method="POST" action="{{ route('admin.users.destroy', $user) }}" data-confirm="Bu kullaniciyi silmek istediginize emin misiniz? Kullanici hesabi pasif olarak listeden kaldirilir, gecmis kayitlar korunur.">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="btn btn-sm btn-outline-danger">Sil</button>

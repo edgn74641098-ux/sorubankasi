@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SubjectController as AdminSubjectController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FavoriteQuestionController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LeaderboardController;
@@ -128,6 +129,11 @@ Route::middleware(['auth', 'verified', 'system.available'])->group(function () {
     Route::post('/questions/{question}/report-unnecessary', [UserSubmittedQuestionController::class, 'reportUnnecessary'])->name('questions.report-unnecessary');
     Route::post('/questions/report', [QuestionReportController::class, 'store'])->name('questions.report');
     Route::get('/questions/my-reports', [QuestionReportController::class, 'myReports'])->name('questions.reports');
+    Route::get('/questions/favorites', [FavoriteQuestionController::class, 'index'])->name('questions.favorites.index');
+    Route::post('/questions/{question}/favorites', [FavoriteQuestionController::class, 'store'])->name('questions.favorites.store');
+    Route::delete('/questions/{question}/favorites', [FavoriteQuestionController::class, 'destroy'])->name('questions.favorites.destroy');
+    Route::patch('/questions/favorites/{favorite}/note', [FavoriteQuestionController::class, 'updateNote'])->name('questions.favorites.note.update');
+    Route::post('/questions/favorites/pdf', [FavoriteQuestionController::class, 'exportPdf'])->name('questions.favorites.pdf');
 });
 
 require __DIR__.'/auth.php';

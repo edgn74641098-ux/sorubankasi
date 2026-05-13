@@ -1,4 +1,8 @@
 <x-app-layout>
+    @push('scripts')
+        <script src="{{ asset('js/questions-submit.js') }}" defer></script>
+    @endpush
+
     <x-slot name="header">
         <h1 class="sb-page-title">Soru Oner</h1>
     </x-slot>
@@ -144,19 +148,4 @@
         </div>
     </div>
 
-    <script>
-    const questionText = document.getElementById('question_text');
-    const explanationText = document.getElementById('explanation_text');
-    const charCount = document.getElementById('char-count');
-    const explanationCount = document.getElementById('explanation-count');
-
-    function syncCounts() {
-        charCount.textContent = questionText.value.length;
-        explanationCount.textContent = explanationText.value.length;
-    }
-
-    questionText.addEventListener('input', syncCounts);
-    explanationText.addEventListener('input', syncCounts);
-    syncCounts();
-    </script>
 </x-app-layout>

@@ -67,7 +67,7 @@
                                             <form method="POST" action="{{ route('admin.subjects.destroy', $subject) }}" class="d-inline">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bu dersi arsive tasimak istediginize emin misiniz? Dersin sorulari da arsivlenir.')">Arsive Tasi</button>
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" data-confirm="Bu dersi arsive tasimak istediginize emin misiniz? Dersin sorulari da arsivlenir.">Arsive Tasi</button>
                                             </form>
                                         @endcan
                                     </td>
@@ -82,4 +82,3 @@
         </div>
     </div>
 @endsection
-

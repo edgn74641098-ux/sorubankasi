@@ -1,4 +1,8 @@
 <x-app-layout>
+    @push('scripts')
+        <script src="{{ asset('js/dashboard.js') }}" defer></script>
+    @endpush
+
     <x-slot name="header">
         <h1 class="sb-page-title">Panel</h1>
     </x-slot>
@@ -428,45 +432,4 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener('click', async (event) => {
-            const link = event.target.closest('#son-testler .pagination a');
-
-            if (! link) {
-                return;
-            }
-
-            event.preventDefault();
-
-            const section = document.getElementById('son-testler');
-            section.setAttribute('aria-busy', 'true');
-
-            try {
-                const response = await fetch(link.href, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                });
-
-                if (! response.ok) {
-                    window.location.href = link.href;
-                    return;
-                }
-
-                const html = await response.text();
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const nextSection = doc.getElementById('son-testler');
-
-                if (! nextSection) {
-                    window.location.href = link.href;
-                    return;
-                }
-
-                section.replaceWith(nextSection);
-                window.history.pushState({}, '', link.href);
-            } catch (error) {
-                window.location.href = link.href;
-            }
-        });
-    </script>
 </x-app-layout>

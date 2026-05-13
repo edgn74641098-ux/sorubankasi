@@ -12,6 +12,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -59,29 +60,73 @@ class DuplicateQuestionController extends Controller
         $scanMeta = null;
 
         if ($runScan) {
-            $questions = Question::query()
-                ->with('subject:id,name')
+            $baseQuery = Question::query()
                 ->where('status', '!=', 'archived')
                 ->when($subjectId > 0, fn ($query) => $query->where('subject_id', $subjectId))
-                ->when($search !== '', fn ($query) => $query->where('question_text', 'like', '%' . $search . '%'))
-                ->orderBy('subject_id')
-                ->orderBy('id')
-                ->limit($maxQuestions)
-                ->get([
-                    'id',
-                    'subject_id',
-                    'question_text',
-                    'option_a',
-                    'option_b',
-                    'option_c',
-                    'option_d',
-                    'option_e',
-                    'status',
-                    'current_version',
-                    'created_at',
-                ]);
+                ->when($search !== '', fn ($query) => $query->where('question_text', 'like', '%' . $search . '%'));
 
-            [$groups, $scanMeta] = $this->buildDuplicateGroups($questions, $threshold);
+            $datasetVersion = (clone $baseQuery)
+                ->selectRaw('COUNT(*) as c, MAX(id) as max_id, MAX(updated_at) as max_updated_at')
+                ->first();
+
+            $signature = implode('|', [
+                $subjectId,
+                $search,
+                $threshold,
+                $maxQuestions,
+                (int) ($datasetVersion->c ?? 0),
+                (int) ($datasetVersion->max_id ?? 0),
+                (string) ($datasetVersion->max_updated_at ?? ''),
+            ]);
+            $cacheKey = 'duplicate_scan:v2:' . sha1($signature);
+
+            $cached = Cache::get($cacheKey);
+            if (is_array($cached) && isset($cached['groups'], $cached['scanMeta'])) {
+                $groups = collect($cached['groups'])->map(function (array $group): array {
+                    $group['questions'] = collect($group['questions'])->map(function (array $q) {
+                        $obj = (object) $q;
+                        return $obj;
+                    });
+                    return $group;
+                });
+                $scanMeta = $cached['scanMeta'];
+                $scanMeta['from_cache'] = true;
+            } else {
+                $questions = (clone $baseQuery)
+                    ->with('subject:id,name')
+                    ->orderBy('subject_id')
+                    ->orderBy('id')
+                    ->limit($maxQuestions)
+                    ->get([
+                        'id',
+                        'subject_id',
+                        'question_text',
+                        'option_a',
+                        'option_b',
+                        'option_c',
+                        'option_d',
+                        'option_e',
+                        'status',
+                        'current_version',
+                        'created_at',
+                    ]);
+
+                [$groups, $scanMeta] = $this->buildDuplicateGroups($questions, $threshold);
+                $scanMeta['from_cache'] = false;
+
+                $cachePayload = [
+                    'groups' => $groups->map(function (array $group): array {
+                        $group['questions'] = $group['questions']
+                            ->map(fn ($q) => (array) $q)
+                            ->values()
+                            ->all();
+                        return $group;
+                    })->values()->all(),
+                    'scanMeta' => $scanMeta,
+                ];
+
+                Cache::put($cacheKey, $cachePayload, now()->addMinutes(10));
+            }
         }
 
         $total = $groups->count();

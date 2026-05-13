@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Subject;
 use App\Models\Test;
+use App\Models\UserFavoriteQuestion;
 use App\Services\AnswerEvaluationService;
 use App\Services\TestFinalizeService;
 use App\Services\TestGenerationService;
@@ -90,6 +91,10 @@ class TestController extends Controller
             'currentIndex' => $current,
             'totalItems' => $test->items->count(),
             'remainingSeconds' => max(0, now()->diffInSeconds($test->started_at->copy()->addMinutes(30), false)),
+            'isFavoriteQuestion' => UserFavoriteQuestion::query()
+                ->where('user_id', $request->user()->id)
+                ->where('question_id', $item->question_id)
+                ->exists(),
         ]);
     }
 

@@ -21,7 +21,7 @@
     }
 @endphp
 
-<details class="sb-report-details mt-3" id="{{ $reportDetailsId }}" @if((string) old('question_id') === (string) $reportQuestion->id) open @endif>
+<details class="sb-report-details js-report-details mt-3" id="{{ $reportDetailsId }}" @if((string) old('question_id') === (string) $reportQuestion->id) open @endif>
     <summary class="btn btn-sm btn-outline-warning">
         <i class="bi bi-exclamation-triangle me-1"></i> Itiraz Et
     </summary>
@@ -116,48 +116,3 @@
         </div>
     </form>
 </details>
-
-<script>
-    (function () {
-        const root = document.getElementById('{{ $reportDetailsId }}');
-        if (!root) {
-            return;
-        }
-
-        const categoryField = root.querySelector('select[name="category"]');
-        const correctWrap = root.querySelector('.js-correct-option-wrap');
-        const correctField = root.querySelector('.js-correct-option-field');
-        const subjectWrap = root.querySelector('.js-subject-wrap');
-        const subjectField = root.querySelector('.js-subject-field');
-        const typoWrap = root.querySelector('.js-typo-wrap');
-        const typoFields = root.querySelectorAll('.js-typo-field');
-
-        const syncFields = () => {
-            const wrongSubject = categoryField && categoryField.value === 'WRONG_SUBJECT';
-            const typoCategory = categoryField && categoryField.value === 'TYPO';
-            if (correctWrap) {
-                correctWrap.classList.toggle('d-none', wrongSubject);
-            }
-            if (correctField) {
-                correctField.required = !wrongSubject;
-            }
-            if (subjectWrap) {
-                subjectWrap.classList.toggle('d-none', !wrongSubject);
-            }
-            if (subjectField) {
-                subjectField.required = wrongSubject;
-            }
-            if (typoWrap) {
-                typoWrap.classList.toggle('d-none', !typoCategory);
-            }
-            typoFields.forEach((field) => {
-                field.required = typoCategory;
-            });
-        };
-
-        if (categoryField) {
-            categoryField.addEventListener('change', syncFields);
-        }
-        syncFields();
-    })();
-</script>

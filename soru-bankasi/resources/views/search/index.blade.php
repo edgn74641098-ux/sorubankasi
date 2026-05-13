@@ -1,4 +1,12 @@
 <x-app-layout>
+    @push('head')
+        <link rel="stylesheet" href="{{ asset('css/search.css') }}">
+    @endpush
+
+    @push('scripts')
+        <script src="{{ asset('js/search.js') }}" defer></script>
+    @endpush
+
     <x-slot name="header">
         <h1 class="sb-page-title">Ara</h1>
     </x-slot>
@@ -240,10 +248,39 @@
                             <div class="vstack gap-3">
                                 @forelse($questionResults as $question)
                                     @php($rowNumber = $questionResults->firstItem() ? $questionResults->firstItem() + $loop->index : $loop->iteration)
+                                    @php($isFavoriteQuestion = in_array((int) $question->id, $favoriteQuestionIds ?? [], true))
                                     <div class="sb-stat-card">
                                         <div class="d-flex flex-column flex-md-row align-items-md-start justify-content-between gap-2 mb-2">
                                             <div class="d-flex flex-wrap gap-2">
                                                 <span class="badge text-bg-dark">#{{ $rowNumber }}</span>
+                                                <span class="badge text-bg-light text-dark border d-inline-flex align-items-center">
+                                                    @if($isFavoriteQuestion)
+                                                        <form method="POST" action="{{ route('questions.favorites.destroy', $question) }}" class="d-inline">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button
+                                                                type="submit"
+                                                                class="btn btn-link p-0 border-0 text-warning lh-1"
+                                                                title="Favorilerden cikar"
+                                                                aria-label="Favorilerden cikar"
+                                                            >
+                                                                <i class="bi bi-star-fill"></i>
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <form method="POST" action="{{ route('questions.favorites.store', $question) }}" class="d-inline">
+                                                            @csrf
+                                                            <button
+                                                                type="submit"
+                                                                class="btn btn-link p-0 border-0 text-warning lh-1"
+                                                                title="Favorilere ekle"
+                                                                aria-label="Favorilere ekle"
+                                                            >
+                                                                <i class="bi bi-star"></i>
+                                                            </button>
+                                                        </form>
+                                                    @endif
+                                                </span>
                                                 <span class="badge text-bg-primary">{{ $question->subject?->name ?? 'Ders yok' }}</span>
                                                 <span class="badge text-bg-light text-dark border">Zorluk: {{ number_format((float) $question->difficulty_score, 1) }}</span>
                                             </div>
@@ -305,81 +342,4 @@
             </div>
         @endif
     </div>
-    <style>
-        .sb-difficulty-range {
-            --sb-difficulty-track: linear-gradient(
-                90deg,
-                #22c55e 0%,
-                #22c55e 50%,
-                #f59e0b 62%,
-                #ef4444 100%
-            );
-            height: 0.45rem;
-        }
-
-        .sb-difficulty-range::-webkit-slider-runnable-track {
-            background: var(--sb-difficulty-track);
-            height: 0.45rem;
-            border-radius: 999px;
-        }
-
-        .sb-difficulty-range::-moz-range-track {
-            background: var(--sb-difficulty-track);
-            height: 0.45rem;
-            border-radius: 999px;
-        }
-
-        .sb-difficulty-range::-webkit-slider-thumb {
-            margin-top: -0.34rem;
-        }
-
-        .sb-difficulty-scale {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 0.2rem;
-            font-size: 0.74rem;
-            color: #6b7280;
-            user-select: none;
-        }
-    </style>
-    <script>
-        (function () {
-            var toggle = document.getElementById('use_difficulty');
-            var row = document.getElementById('difficulty-range-row');
-            var minSlider = document.getElementById('min_difficulty');
-            var maxSlider = document.getElementById('max_difficulty');
-            var minOutput = document.getElementById('minDifficultyValue');
-            var maxOutput = document.getElementById('maxDifficultyValue');
-
-            if (!toggle || !row) {
-                return;
-            }
-
-            function syncDifficultyVisibility() {
-                row.classList.toggle('d-none', !toggle.checked);
-            }
-
-            toggle.addEventListener('change', syncDifficultyVisibility);
-            syncDifficultyVisibility();
-
-            if (minSlider && maxSlider) {
-                var syncRangeValues = function () {
-                    if (parseFloat(minSlider.value) > parseFloat(maxSlider.value)) {
-                        maxSlider.value = minSlider.value;
-                    }
-
-                    if (minOutput) {
-                        minOutput.textContent = Number(minSlider.value).toFixed(1);
-                    }
-                    if (maxOutput) {
-                        maxOutput.textContent = Number(maxSlider.value).toFixed(1);
-                    }
-                };
-
-                minSlider.addEventListener('input', syncRangeValues);
-                maxSlider.addEventListener('input', syncRangeValues);
-                syncRangeValues();
-            }
-        })();
-    </script>
 </x-app-layout>

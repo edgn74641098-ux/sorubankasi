@@ -86,7 +86,7 @@
                             <a href="{{ route('admin.imports.show', $batch) }}" class="btn btn-sm btn-outline-primary">
                                 Detay
                             </a>
-                            <form method="POST" action="{{ route('admin.imports.destroy', $batch) }}" onsubmit="return confirm('Bu import kaydini silmek istediginize emin misiniz? Uygulanmis sorular silinmez.');">
+                            <form method="POST" action="{{ route('admin.imports.destroy', $batch) }}" data-confirm="Bu import kaydini silmek istediginize emin misiniz? Uygulanmis sorular silinmez.">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
