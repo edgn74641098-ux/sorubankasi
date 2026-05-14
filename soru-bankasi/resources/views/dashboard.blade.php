@@ -133,15 +133,24 @@
                                 $barY = $perfChart['base_y'] - $questionHeight;
                                 $accuracyY = $perfChart['base_y'] - ((($day['accuracy'] ?? 0) / 100) * $perfChart['plot_height']);
                                 $testY = $perfChart['base_y'] - (($day['tests'] / $perfMaxTests) * $perfChart['plot_height']);
-                                $showLabel = $loop->first || $loop->last || (($loop->iteration - 1) % 5 === 0);
+                                $accuracyValueY = max($perfChart['top'] + 10, $accuracyY - 10);
+                                $testValueY = max($perfChart['top'] + 10, $testY - 10);
                             @endphp
                             <g>
                                 <title>{{ $day['label'] }}: {{ $day['tests'] }} test, {{ $day['questions'] }} soru, {{ $day['correct'] }} dogru, {{ $day['wrong'] }} yanlis, {{ $day['accuracy'] !== null ? '%' . number_format($day['accuracy'], 1) : 'oran yok' }}</title>
                                 <rect x="{{ round($barX, 1) }}" y="{{ round($barY, 1) }}" width="{{ round($barWidth, 1) }}" height="{{ round($questionHeight, 1) }}" rx="4" class="sb-performance-bar" />
                                 <circle cx="{{ round($x, 1) }}" cy="{{ round($testY, 1) }}" r="{{ $day['tests'] > 0 ? 3.8 : 2.8 }}" class="sb-performance-point sb-performance-point--tests" />
                                 <circle cx="{{ round($x, 1) }}" cy="{{ round($accuracyY, 1) }}" r="{{ $day['accuracy'] !== null ? 3.8 : 2.8 }}" class="sb-performance-point sb-performance-point--accuracy" />
-                                @if($showLabel)
-                                    <text x="{{ round($x, 1) }}" y="{{ $perfChart['height'] - 16 }}" text-anchor="middle" class="sb-performance-label">{{ $day['label'] }}</text>
+                                <text
+                                    x="{{ round($x, 1) }}"
+                                    y="{{ $perfChart['base_y'] + 10 }}"
+                                    text-anchor="end"
+                                    transform="rotate(-38 {{ round($x, 1) }} {{ $perfChart['base_y'] + 10 }})"
+                                    class="sb-performance-label"
+                                >{{ $day['label'] }}</text>
+                                <text x="{{ round($x, 1) }}" y="{{ round($testValueY, 1) }}" text-anchor="middle" class="sb-performance-value sb-performance-value--tests">{{ $day['tests'] }}</text>
+                                @if($day['accuracy'] !== null)
+                                    <text x="{{ round($x, 1) }}" y="{{ round($accuracyValueY, 1) }}" text-anchor="middle" class="sb-performance-value sb-performance-value--accuracy">%{{ number_format($day['accuracy'], 1) }}</text>
                                 @endif
                             </g>
                         @endforeach

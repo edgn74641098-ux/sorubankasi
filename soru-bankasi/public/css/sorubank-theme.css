@@ -1744,9 +1744,27 @@ a:hover {
 }
 
 .sb-performance-label {
-    fill: #667085;
-    font-size: 12px;
+    fill: #556276;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.sb-performance-value {
+    font-size: 9px;
     font-weight: 800;
+    paint-order: stroke;
+    stroke: #ffffff;
+    stroke-width: 2px;
+    stroke-linejoin: round;
+}
+
+.sb-performance-value--tests {
+    fill: #146c94;
+}
+
+.sb-performance-value--accuracy {
+    fill: #c97d14;
 }
 
 .sb-performance-detail-grid {
