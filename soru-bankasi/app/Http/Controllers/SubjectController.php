@@ -45,6 +45,7 @@ class SubjectController extends Controller
             ->join('questions', 'questions.id', '=', 'user_wrong_question_stats.question_id')
             ->where('user_wrong_question_stats.user_id', $request->user()->id)
             ->where('questions.status', 'active')
+            ->whereNull('questions.deleted_at')
             ->selectRaw('questions.subject_id, COUNT(DISTINCT user_wrong_question_stats.question_id) as weak_count')
             ->groupBy('questions.subject_id')
             ->pluck('weak_count', 'questions.subject_id');
