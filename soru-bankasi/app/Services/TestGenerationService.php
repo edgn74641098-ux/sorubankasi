@@ -38,6 +38,29 @@ class TestGenerationService
         };
 
         $questions = $selection['questions'];
+        $message = $selection['message'];
+
+        if ($excludeSolvedQuestions && $questions->count() < self::QUESTION_COUNT) {
+            $missing = self::QUESTION_COUNT - $questions->count();
+            $fallback = $this->balancedQuestionSelection(
+                $user,
+                $subject,
+                fn ($query) => $query->whereNotIn('id', $questions->pluck('id')),
+                $missing,
+                false
+            );
+
+            $questions = $questions
+                ->concat($fallback)
+                ->unique('id')
+                ->values();
+
+            $message = trim(implode(' ', array_filter([
+                $message,
+                'Cozulmus soru dislama acik oldugu icin eksik kalan sorular rastgele havuzdan tamamlandi.',
+            ])));
+        }
+
         if ($questions->count() < self::QUESTION_COUNT) {
             throw $this->httpException(422, 'mode_pool_insufficient', 'Secilen mod icin yeterli soru bulunamadi.');
         }
@@ -71,7 +94,6 @@ class TestGenerationService
             ->whereDate('created_at', now()->toDateString())
             ->count();
 
-        $message = $selection['message'];
         if ($todayTestCount >= $dailyLimit) {
             $message = 'Bugun son test hakkinizi kullandiniz.' . ($message ? ' ' . $message : '');
         } elseif ($todayTestCount >= max(10, (int) floor($dailyLimit / 2))) {
